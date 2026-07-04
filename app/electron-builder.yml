@@ -1,0 +1,15 @@
+appId: com.doogle.honrebornmodmanager
+productName: HoN Reborn Mod Manager
+directories:
+  buildResources: build
+files:
+  - out/**
+  - package.json
+win:
+  target: nsis
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false

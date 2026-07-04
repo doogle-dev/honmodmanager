@@ -1,0 +1,8 @@
+/*
+!/.gitignore
+!/README.md
+!/app
+/app/node_modules
+/app/out
+/app/dist
+/app/dev-library
