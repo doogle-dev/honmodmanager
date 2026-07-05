@@ -11,7 +11,7 @@ publish:
   repo: honmodmanager
 win:
   target: nsis
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${name}-${version}-setup.${ext}
 nsis:
   oneClick: false
   perMachine: false

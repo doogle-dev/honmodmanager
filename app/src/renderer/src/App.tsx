@@ -25,6 +25,17 @@ function ModIcon({ mod, size }: { mod: CatalogMod; size: string }): JSX.Element 
   return <div className={size + ' rounded bg-black/30'} />
 }
 
+function formatMegabytes(byteCount: number): string {
+  return (byteCount / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return (bytesPerSecond / (1024 * 1024)).toFixed(1) + ' MB/s'
+  }
+  return Math.round(bytesPerSecond / 1024) + ' KB/s'
+}
+
 function App(): JSX.Element {
   const [mods, setMods] = useState<CatalogMod[]>([])
   const [status, setStatus] = useState('')
@@ -34,7 +45,7 @@ function App(): JSX.Element {
   const [detailMod, setDetailMod] = useState<CatalogMod | null>(null)
   const [launchingGame, setLaunchingGame] = useState(false)
   const [updateReadyVersion, setUpdateReadyVersion] = useState('')
-  const [downloadPercent, setDownloadPercent] = useState<number | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState<UpdateProgress | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [updateCheckMessage, setUpdateCheckMessage] = useState('')
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
@@ -53,10 +64,18 @@ function App(): JSX.Element {
 
   useEffect(() => {
     loadCatalog()
-    window.modManager.onUpdateProgress((percent) => setDownloadPercent(percent))
+    window.modManager.onUpdateProgress((progress) => setDownloadProgress(progress))
     window.modManager.onUpdateDownloaded((version) => {
-      setDownloadPercent(100)
+      setDownloadProgress(null)
       setUpdateReadyVersion(version)
+    })
+    window.modManager.onUpdateCancelled(() => {
+      setDownloadProgress(null)
+      setUpdateCheckMessage('Download cancelled.')
+    })
+    window.modManager.onUpdateError((message) => {
+      setDownloadProgress(null)
+      setUpdateCheckMessage('Update download failed: ' + message)
     })
     window.modManager.getAppInfo().then((appInfo) => setAppVersion(appInfo.version))
   }, [])
@@ -69,8 +88,9 @@ function App(): JSX.Element {
       if (result.status === 'current') {
         setUpdateCheckMessage('You are on the latest version.')
       } else if (result.status === 'downloading') {
-        setDownloadPercent(0)
-        setUpdateCheckMessage('Update ' + result.version + ' found. Downloading now, the restart button will appear below when it is ready.')
+        setUpdateReadyVersion('')
+        setDownloadProgress({ percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 })
+        setUpdateCheckMessage('Update ' + result.version + ' found. Downloading now, the restart button will appear when it is ready.')
       } else if (result.status === 'unavailable') {
         setUpdateCheckMessage('Updates only work in the installed app.')
       } else {
@@ -392,17 +412,32 @@ function App(): JSX.Element {
                   {checkingForUpdates ? 'Checking...' : 'Check for Updates'}
                 </button>
                 {updateCheckMessage && <p className="mt-3 text-slate-400">{updateCheckMessage}</p>}
-                {downloadPercent !== null && (
+                {downloadProgress && (
                   <div className="mt-3">
-                    <div className="mb-1 flex justify-between text-xs text-slate-400">
-                      <span>{updateReadyVersion ? 'Download complete' : 'Downloading update'}</span>
-                      <span>{downloadPercent}%</span>
+                    <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                      <span>Downloading update</span>
+                      <span>{downloadProgress.percent}%</span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
                       <div
                         className="h-full rounded-full transition-[width] duration-200"
-                        style={{ width: downloadPercent + '%', backgroundColor: ACCENT }}
+                        style={{ width: downloadProgress.percent + '%', backgroundColor: ACCENT }}
                       />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
+                      <span>
+                        {downloadProgress.total > 0
+                          ? formatMegabytes(downloadProgress.transferred) + ' / ' + formatMegabytes(downloadProgress.total)
+                          : 'Starting...'}
+                        {downloadProgress.bytesPerSecond > 0 && ' at ' + formatSpeed(downloadProgress.bytesPerSecond)}
+                      </span>
+                      <button
+                        onClick={() => window.modManager.cancelUpdate()}
+                        className="rounded px-2.5 py-1 font-medium text-white hover:brightness-110"
+                        style={{ backgroundColor: '#5b6070' }}
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 )}

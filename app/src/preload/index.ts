@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+interface UpdateProgress {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
 const modManagerApi = {
   listCatalog: () => ipcRenderer.invoke('catalog:list'),
   installMod: (fileName: string) => ipcRenderer.invoke('catalog:install', fileName),
@@ -13,11 +20,18 @@ const modManagerApi = {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  cancelUpdate: () => ipcRenderer.invoke('updater:cancel'),
   onUpdateDownloaded: (listener: (version: string) => void) => {
     ipcRenderer.on('updater:downloaded', (_event, version: string) => listener(version))
   },
-  onUpdateProgress: (listener: (percent: number) => void) => {
-    ipcRenderer.on('updater:progress', (_event, percent: number) => listener(percent))
+  onUpdateProgress: (listener: (progress: UpdateProgress) => void) => {
+    ipcRenderer.on('updater:progress', (_event, progress: UpdateProgress) => listener(progress))
+  },
+  onUpdateCancelled: (listener: () => void) => {
+    ipcRenderer.on('updater:cancelled', () => listener())
+  },
+  onUpdateError: (listener: (message: string) => void) => {
+    ipcRenderer.on('updater:error', (_event, message: string) => listener(message))
   }
 }
 

@@ -36,8 +36,18 @@ interface ModManagerApi {
   launchVanilla: () => Promise<boolean>
   installUpdate: () => Promise<void>
   checkForUpdates: () => Promise<UpdateCheckResult>
+  cancelUpdate: () => Promise<void>
   onUpdateDownloaded: (listener: (version: string) => void) => void
-  onUpdateProgress: (listener: (percent: number) => void) => void
+  onUpdateProgress: (listener: (progress: UpdateProgress) => void) => void
+  onUpdateCancelled: (listener: () => void) => void
+  onUpdateError: (listener: (message: string) => void) => void
+}
+
+interface UpdateProgress {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
 }
 
 interface UpdateCheckResult {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import appIconPath from '../../resources/icon.png?asset'
-import { autoUpdater } from 'electron-updater'
+import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, cpSync, statSync } from 'fs'
 import { locateJuvioRoot, baseArchivePath, modsOverlayArchivePath, launchGame } from './juvioLauncher'
@@ -312,6 +312,12 @@ function registerInterProcessHandlers(): void {
       const checkResult = await autoUpdater.checkForUpdates()
       const latestVersion = checkResult?.updateInfo?.version ?? ''
       if (latestVersion && isNewerVersion(latestVersion, app.getVersion())) {
+        activeDownloadCancellationToken = new CancellationToken()
+        autoUpdater.downloadUpdate(activeDownloadCancellationToken).catch((error) => {
+          if (!activeDownloadCancellationToken?.cancelled) {
+            mainWindowReference?.webContents.send('updater:error', String(error))
+          }
+        })
         return { status: 'downloading', version: latestVersion }
       }
       return { status: 'current', version: app.getVersion() }
@@ -319,9 +325,15 @@ function registerInterProcessHandlers(): void {
       return { status: 'error', message: String(error) }
     }
   })
+
+  ipcMain.handle('updater:cancel', () => {
+    activeDownloadCancellationToken?.cancel()
+    activeDownloadCancellationToken = null
+  })
 }
 
 let mainWindowReference: BrowserWindow | null = null
+let activeDownloadCancellationToken: CancellationToken | null = null
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -369,13 +381,26 @@ app.whenReady().then(() => {
   createMainWindow()
 
   if (app.isPackaged) {
+    autoUpdater.autoDownload = false
     autoUpdater.on('download-progress', (progress) => {
-      mainWindowReference?.webContents.send('updater:progress', Math.round(progress.percent))
+      mainWindowReference?.webContents.send('updater:progress', {
+        percent: Math.round(progress.percent),
+        transferred: progress.transferred,
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond
+      })
     })
     autoUpdater.on('update-downloaded', (updateInfo) => {
+      activeDownloadCancellationToken = null
       mainWindowReference?.webContents.send('updater:downloaded', updateInfo.version)
     })
-    autoUpdater.checkForUpdatesAndNotify().catch(() => undefined)
+    autoUpdater.on('update-cancelled', () => {
+      activeDownloadCancellationToken = null
+      mainWindowReference?.webContents.send('updater:cancelled')
+    })
+    autoUpdater.on('error', (updateError) => {
+      mainWindowReference?.webContents.send('updater:error', String(updateError))
+    })
   }
 
   app.on('activate', () => {
