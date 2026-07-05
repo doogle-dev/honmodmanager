@@ -37,6 +37,7 @@ interface ModManagerApi {
   installUpdate: () => Promise<void>
   checkForUpdates: () => Promise<UpdateCheckResult>
   onUpdateDownloaded: (listener: (version: string) => void) => void
+  onUpdateProgress: (listener: (percent: number) => void) => void
 }
 
 interface UpdateCheckResult {

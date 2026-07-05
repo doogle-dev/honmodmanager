@@ -369,6 +369,9 @@ app.whenReady().then(() => {
   createMainWindow()
 
   if (app.isPackaged) {
+    autoUpdater.on('download-progress', (progress) => {
+      mainWindowReference?.webContents.send('updater:progress', Math.round(progress.percent))
+    })
     autoUpdater.on('update-downloaded', (updateInfo) => {
       mainWindowReference?.webContents.send('updater:downloaded', updateInfo.version)
     })

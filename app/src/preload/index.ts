@@ -15,6 +15,9 @@ const modManagerApi = {
   checkForUpdates: () => ipcRenderer.invoke('updater:check'),
   onUpdateDownloaded: (listener: (version: string) => void) => {
     ipcRenderer.on('updater:downloaded', (_event, version: string) => listener(version))
+  },
+  onUpdateProgress: (listener: (percent: number) => void) => {
+    ipcRenderer.on('updater:progress', (_event, percent: number) => listener(percent))
   }
 }
 
