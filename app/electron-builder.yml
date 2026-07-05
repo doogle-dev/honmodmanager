@@ -5,6 +5,10 @@ directories:
 files:
   - out/**
   - package.json
+publish:
+  provider: github
+  owner: doogle-dev
+  repo: honmodmanager
 win:
   target: nsis
   artifactName: ${productName}-${version}-setup.${ext}
