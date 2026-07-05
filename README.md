@@ -25,7 +25,3 @@ npm run dev
 cd app
 npm run build:win
 ```
-
-## Notes
-
-Cursor size is adjusted inside the game. Open Options and use the cursor size slider. The manager only changes the cursor art.

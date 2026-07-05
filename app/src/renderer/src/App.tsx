@@ -518,7 +518,8 @@ function App(): JSX.Element {
               )}
               <button
                 onClick={() => setDetailMod(null)}
-                className="ml-auto rounded-md px-4 py-2 text-sm font-medium text-slate-300 hover:bg-black/20"
+                className="ml-auto rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                style={{ backgroundColor: '#d64c4c' }}
               >
                 Close
               </button>
