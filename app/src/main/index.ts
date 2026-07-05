@@ -9,6 +9,7 @@ import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogCli
 import type { Catalog } from './catalogClient'
 
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
+const PUBLIC_CATALOG_URL = 'https://raw.githubusercontent.com/doogle-dev/honmodmanager/main/server/catalog'
 
 function honmodLibraryDirectory(): string {
   const directory = app.isPackaged
@@ -19,7 +20,10 @@ function honmodLibraryDirectory(): string {
 }
 
 function catalogBaseUrl(): string {
-  return process.env.HON_CATALOG_URL ?? DEVELOPMENT_CATALOG_URL
+  if (process.env.HON_CATALOG_URL) {
+    return process.env.HON_CATALOG_URL
+  }
+  return app.isPackaged ? PUBLIC_CATALOG_URL : DEVELOPMENT_CATALOG_URL
 }
 
 const MOD_SETTINGS_PROFILE_NAME = 'mods'
