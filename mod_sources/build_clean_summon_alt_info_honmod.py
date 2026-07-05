@@ -6,6 +6,10 @@ MODS_OUTPUT_DIRECTORY = os.path.join(os.path.dirname(MOD_SOURCES_DIRECTORY), "mo
 
 PET_ALT_INFO_EDITS = [
     (
+        '\t\t\t\t\t<label name="name_label{unit}" fitx="1" fity="1" style="centerall" font="dyn_bold_9" color=".8 .8 .8 1" shadow="1" />',
+        '\t\t\t\t\t<label name="name_label{unit}" visible="0" fitx="1" fity="1" style="centerall" font="dyn_bold_9" color=".8 .8 .8 1" shadow="1" />',
+    ),
+    (
         '\t\t\t<panel width="100%" height="2.9h" noclick="1">',
         '\t\t\t<panel visible="0" width="100%" height="2.9h" noclick="1">',
     ),
@@ -29,9 +33,9 @@ MANIFEST_TEXT = """<?xml version="1.0" encoding="UTF-8"?>
 	appversion="*"
 	mmversion="*"
 	name="Clean Summon Alt Info"
-	version="1.0"
+	version="1.1"
 	date="06/07/2026"
-	description="Hides the owner hero icon and removes the dark background from the info panel that appears above summoned units when you hold Alt, like Slither toxin wards and Pharaoh mummies, so they are much less visually cluttered. Affects every summoned pet unit."
+	description="Hides the owner hero icon, the unit name and the dark background from the info panel that appears above summoned units when you hold Alt, like Slither toxin wards and Pharaoh mummies, so they are much less visually cluttered. Affects every summoned pet unit."
 	author="Doogle"
 	category="Interface"
 	weblink=""
@@ -46,7 +50,7 @@ MANIFEST_TEXT = """<?xml version="1.0" encoding="UTF-8"?>
     pet_alt_info_edit_pairs=build_edit_pairs_xml(PET_ALT_INFO_EDITS),
 )
 
-CHANGELOG_TEXT = "v1.0 (06 Jul 2026)\nRelease\nHides the owner hero icon and makes the Alt info panel background transparent for summoned units\n"
+CHANGELOG_TEXT = "v1.1 (06 Jul 2026)\nAlso hides the unit name like Toxin Ward and Mummy Wall\n\nv1.0 (06 Jul 2026)\nRelease\nHides the owner hero icon and makes the Alt info panel background transparent for summoned units\n"
 
 
 def build_clean_summon_alt_info_honmod():

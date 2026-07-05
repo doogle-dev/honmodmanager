@@ -33,14 +33,14 @@
       "id": "clean-summon-alt-info",
       "fileName": "CleanSummonAltInfo.honmod",
       "name": "Clean Summon Alt Info",
-      "version": "1.0",
+      "version": "1.1",
       "author": "Doogle",
-      "description": "Hides the owner hero icon and removes the dark background from the info panel that appears above summoned units when you hold Alt, like Slither toxin wards and Pharaoh mummies, so they are much less visually cluttered. Affects every summoned pet unit.",
+      "description": "Hides the owner hero icon, the unit name and the dark background from the info panel that appears above summoned units when you hold Alt, like Slither toxin wards and Pharaoh mummies, so they are much less visually cluttered. Affects every summoned pet unit.",
       "category": "Interface",
       "abilityKey": "",
       "icon": "",
       "download": "mods/CleanSummonAltInfo.honmod",
-      "sha256": "359bd4c28cf613e30895d74cbc9b619b2d2c671ec898b78bff59f603d25b92c4"
+      "sha256": "b4d124af7122f3bbb907c1a118ec64dc846ad116744bf4d10f23777199432fc7"
     },
     {
       "id": "click-through-top-bar",
