@@ -12,7 +12,7 @@ import {
   Plus
 } from 'lucide-react'
 
-type PageKey = 'browse' | 'installed' | 'credits'
+type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
 
 const ACCENT = '#7287d9'
 const APP_BACKGROUND = '#313747'
@@ -34,6 +34,9 @@ function App(): JSX.Element {
   const [detailMod, setDetailMod] = useState<CatalogMod | null>(null)
   const [launchingGame, setLaunchingGame] = useState(false)
   const [updateReadyVersion, setUpdateReadyVersion] = useState('')
+  const [appVersion, setAppVersion] = useState('')
+  const [updateCheckMessage, setUpdateCheckMessage] = useState('')
+  const [checkingForUpdates, setCheckingForUpdates] = useState(false)
 
   async function loadCatalog(): Promise<void> {
     try {
@@ -50,7 +53,27 @@ function App(): JSX.Element {
   useEffect(() => {
     loadCatalog()
     window.modManager.onUpdateDownloaded(setUpdateReadyVersion)
+    window.modManager.getAppInfo().then((appInfo) => setAppVersion(appInfo.version))
   }, [])
+
+  async function checkForUpdates(): Promise<void> {
+    setCheckingForUpdates(true)
+    setUpdateCheckMessage('Checking for updates...')
+    try {
+      const result = await window.modManager.checkForUpdates()
+      if (result.status === 'current') {
+        setUpdateCheckMessage('You are on the latest version.')
+      } else if (result.status === 'downloading') {
+        setUpdateCheckMessage('Update ' + result.version + ' found. Downloading now, the restart button will appear below when it is ready.')
+      } else if (result.status === 'unavailable') {
+        setUpdateCheckMessage('Updates only work in the installed app.')
+      } else {
+        setUpdateCheckMessage('Update check failed: ' + (result.message ?? 'unknown error'))
+      }
+    } finally {
+      setCheckingForUpdates(false)
+    }
+  }
 
   async function toggleMod(fileName: string, enabled: boolean): Promise<void> {
     await window.modManager.setModEnabled(fileName, enabled)
@@ -225,11 +248,13 @@ function App(): JSX.Element {
   const pageTitles: Record<PageKey, string> = {
     browse: 'Browse Mods',
     installed: 'Installed Mods',
+    settings: 'Settings',
     credits: 'Credits'
   }
   const pageIcons: Record<PageKey, JSX.Element> = {
     browse: <Library className="h-6 w-6" />,
     installed: <HardDrive className="h-6 w-6" />,
+    settings: <Settings className="h-6 w-6" />,
     credits: <Info className="h-6 w-6" />
   }
 
@@ -245,6 +270,7 @@ function App(): JSX.Element {
         <nav className="flex flex-col gap-1">
           {renderNavItem('browse', 'Browse mods', <Library className="h-5 w-5" />)}
           {renderNavItem('installed', 'Installed mods', <HardDrive className="h-5 w-5" />)}
+          {renderNavItem('settings', 'Settings', <Settings className="h-5 w-5" />)}
           {renderNavItem('credits', 'Credits', <Info className="h-5 w-5" />)}
         </nav>
 
@@ -344,6 +370,24 @@ function App(): JSX.Element {
                 </div>
               )}
             </>
+          )}
+
+          {page === 'settings' && (
+            <div className="max-w-xl space-y-4 text-sm">
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">Updates</h2>
+                <p className="text-slate-400">Current version {appVersion || 'unknown'}</p>
+                <button
+                  onClick={checkForUpdates}
+                  disabled={checkingForUpdates}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  {checkingForUpdates ? 'Checking...' : 'Check for Updates'}
+                </button>
+                {updateCheckMessage && <p className="mt-3 text-slate-400">{updateCheckMessage}</p>}
+              </div>
+            </div>
           )}
 
           {page === 'credits' && (

@@ -303,6 +303,22 @@ function registerInterProcessHandlers(): void {
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall()
   })
+
+  ipcMain.handle('updater:check', async () => {
+    if (!app.isPackaged) {
+      return { status: 'unavailable' }
+    }
+    try {
+      const checkResult = await autoUpdater.checkForUpdates()
+      const latestVersion = checkResult?.updateInfo?.version ?? ''
+      if (latestVersion && isNewerVersion(latestVersion, app.getVersion())) {
+        return { status: 'downloading', version: latestVersion }
+      }
+      return { status: 'current', version: app.getVersion() }
+    } catch (error) {
+      return { status: 'error', message: String(error) }
+    }
+  })
 }
 
 let mainWindowReference: BrowserWindow | null = null

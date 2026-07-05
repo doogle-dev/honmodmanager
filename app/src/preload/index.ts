@@ -12,6 +12,7 @@ const modManagerApi = {
   launchVanilla: () => ipcRenderer.invoke('game:launchVanilla'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
   onUpdateDownloaded: (listener: (version: string) => void) => {
     ipcRenderer.on('updater:downloaded', (_event, version: string) => listener(version))
   }

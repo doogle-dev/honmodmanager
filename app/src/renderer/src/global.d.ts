@@ -35,7 +35,14 @@ interface ModManagerApi {
   launchModded: () => Promise<boolean>
   launchVanilla: () => Promise<boolean>
   installUpdate: () => Promise<void>
+  checkForUpdates: () => Promise<UpdateCheckResult>
   onUpdateDownloaded: (listener: (version: string) => void) => void
+}
+
+interface UpdateCheckResult {
+  status: 'current' | 'downloading' | 'unavailable' | 'error'
+  version?: string
+  message?: string
 }
 
 interface Window {
