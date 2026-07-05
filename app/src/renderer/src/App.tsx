@@ -49,6 +49,7 @@ function App(): JSX.Element {
 
   useEffect(() => {
     loadCatalog()
+    window.modManager.onUpdateDownloaded(setUpdateReadyVersion)
   }, [])
 
   async function toggleMod(fileName: string, enabled: boolean): Promise<void> {
@@ -365,8 +366,20 @@ function App(): JSX.Element {
       </main>
       </div>
 
-      <footer className="px-8 py-2" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-        <span className="block h-4 text-xs text-white">{status}</span>
+      <footer className="flex items-center justify-between gap-4 px-8 py-2" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+        <span className="block h-4 min-w-0 truncate text-xs text-white">{status}</span>
+        {updateReadyVersion && (
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-slate-400">Update {updateReadyVersion} ready</span>
+            <button
+              onClick={() => window.modManager.installUpdate()}
+              className="rounded px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110"
+              style={{ backgroundColor: ACCENT }}
+            >
+              Restart Now
+            </button>
+          </div>
+        )}
       </footer>
 
       {detailMod && (
