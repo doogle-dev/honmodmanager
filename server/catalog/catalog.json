@@ -1,8 +1,21 @@
 {
   "manager": {
-    "version": "0.1.1"
+    "version": "0.1.3"
   },
   "mods": [
+    {
+      "id": "boss-timers-on-screen",
+      "fileName": "BossTimersOnScreen.honmod",
+      "name": "Boss Timers On Screen",
+      "version": "1.0",
+      "author": "Doogle",
+      "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.",
+      "category": "Interface",
+      "abilityKey": "",
+      "icon": "icons/boss-timers-on-screen.png",
+      "download": "mods/BossTimersOnScreen.honmod",
+      "sha256": "5ed922011a9912dff3238ba1861863c7ba74d18b428f5f775427ace06fbc2f1a"
+    },
     {
       "id": "brighter-ward-spots",
       "fileName": "BrighterWardSpots.honmod",
@@ -15,6 +28,19 @@
       "icon": "icons/brighter-ward-spots.png",
       "download": "mods/BrighterWardSpots.honmod",
       "sha256": "1b4bb054ed65738bb5955d6d58e712fea21ba4c3721b7c4ccfdfd34efde07d63"
+    },
+    {
+      "id": "clean-summon-alt-info",
+      "fileName": "CleanSummonAltInfo.honmod",
+      "name": "Clean Summon Alt Info",
+      "version": "1.0",
+      "author": "Doogle",
+      "description": "Hides the owner hero icon and removes the dark background from the info panel that appears above summoned units when you hold Alt, like Slither toxin wards and Pharaoh mummies, so they are much less visually cluttered. Affects every summoned pet unit.",
+      "category": "Interface",
+      "abilityKey": "",
+      "icon": "",
+      "download": "mods/CleanSummonAltInfo.honmod",
+      "sha256": "359bd4c28cf613e30895d74cbc9b619b2d2c671ec898b78bff59f603d25b92c4"
     },
     {
       "id": "click-through-top-bar",
@@ -53,7 +79,7 @@
       "abilityKey": "",
       "icon": "icons/astrolabe-range-ring.png",
       "download": "mods/RangeRingAstrolabe.honmod",
-      "sha256": "27ee0951a8aaa631600ca76547f64067839610ebc8b0daf51b23b4fca08c9659"
+      "sha256": "e56745e82e4cd40fa7c193f993a984f08fc30e15790bbf3319f0a7506ce056f6"
     },
     {
       "id": "moon-queen-moon-finale-range-ring",
