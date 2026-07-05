@@ -10,6 +10,7 @@ export interface CatalogModEntry {
   author: string
   description: string
   category: string
+  abilityKey: string
   icon: string
   download: string
   sha256: string

@@ -116,7 +116,14 @@ function App(): JSX.Element {
     }
   }
 
-  const installedMods = mods.filter((mod) => mod.installed)
+  const installedMods = mods
+    .filter((mod) => mod.installed)
+    .sort((firstMod, secondMod) => {
+      if (firstMod.enabled !== secondMod.enabled) {
+        return firstMod.enabled ? -1 : 1
+      }
+      return firstMod.name.localeCompare(secondMod.name)
+    })
   const browseMods = mods.filter((mod) => !mod.installed)
   const availableCategories = ['All categories', ...new Set(browseMods.map((mod) => mod.category || 'Other'))]
   const filteredBrowseMods = browseMods.filter((mod) => {
@@ -137,6 +144,15 @@ function App(): JSX.Element {
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
               <span className="truncate text-sm font-semibold text-white">{mod.name}</span>
+              {mod.abilityKey && (
+                <span className="flex shrink-0 gap-1">
+                  {mod.abilityKey.split('').map((abilityLetter) => (
+                    <span key={abilityLetter} className="rounded bg-black px-1.5 py-0.5 text-xs font-bold text-white">
+                      {abilityLetter}
+                    </span>
+                  ))}
+                </span>
+              )}
             </div>
             <span className="text-xs text-slate-500">by {mod.author || 'unknown'}</span>
           </div>
@@ -216,7 +232,8 @@ function App(): JSX.Element {
   }
 
   return (
-    <div className="flex h-screen text-slate-200" style={{ backgroundColor: APP_BACKGROUND }}>
+    <div className="flex h-screen flex-col text-slate-200" style={{ backgroundColor: APP_BACKGROUND }}>
+      <div className="flex min-h-0 flex-1">
       <aside className="flex w-56 flex-col border-r border-white/20 p-3" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
         <div className="mb-5 flex items-center gap-2 px-2 pt-2">
           <Settings className="h-7 w-7" style={{ color: ACCENT }} />
@@ -329,19 +346,27 @@ function App(): JSX.Element {
 
           {page === 'credits' && (
             <div className="max-w-xl space-y-4 text-sm">
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: APP_BACKGROUND }}>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                 <h2 className="mb-2 font-semibold text-white">Credits</h2>
-                <p className="text-slate-400">Mods and manager by Doogle.</p>
+                <p className="text-slate-400">
+                  Mods and manager by Doogle, creator of{' '}
+                  <a href="https://ward-up.com" target="_blank" rel="noreferrer" className="hover:underline" style={{ color: ACCENT }}>
+                    WardUp
+                  </a>
+                  .
+                </p>
                 <p className="mt-1 text-slate-400">Built on the classic honmod format for Heroes of Newerth Reborn.</p>
               </div>
             </div>
           )}
         </div>
 
-        <footer className="px-8 py-2">
-          <span className="text-xs text-slate-500">{status}</span>
-        </footer>
       </main>
+      </div>
+
+      <footer className="px-8 py-2" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+        <span className="block h-4 text-xs text-white">{status}</span>
+      </footer>
 
       {detailMod && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setDetailMod(null)}>

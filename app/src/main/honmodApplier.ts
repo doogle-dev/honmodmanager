@@ -10,6 +10,7 @@ export interface HonmodMetadata {
   author: string
   description: string
   category: string
+  abilityKey: string
   updateCheckUrl: string
   updateDownloadUrl: string
 }
@@ -114,6 +115,7 @@ export function readHonmodMetadata(honmodPath: string): HonmodMetadata {
       author: readAttribute(modification, 'author', ''),
       description: readAttribute(modification, 'description', ''),
       category: readAttribute(modification, 'category', 'Other'),
+      abilityKey: readAttribute(modification, 'abilitykey', ''),
       updateCheckUrl: readAttribute(modification, 'updatecheckurl', ''),
       updateDownloadUrl: readAttribute(modification, 'updatedownloadurl', '')
     }

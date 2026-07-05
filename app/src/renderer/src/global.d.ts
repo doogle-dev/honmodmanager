@@ -5,6 +5,7 @@ interface CatalogMod {
   author: string
   description: string
   category: string
+  abilityKey: string
   icon: string | null
   installed: boolean
   enabled: boolean

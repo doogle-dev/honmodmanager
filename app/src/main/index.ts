@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import appIconPath from '../../resources/icon.png?asset'
 import { autoUpdater } from 'electron-updater'
 import { join, resolve, basename } from 'path'
@@ -220,6 +220,7 @@ function registerInterProcessHandlers(): void {
           author: entry.author,
           description: entry.description,
           category: entry.category,
+          abilityKey: installed ? installed.abilityKey : (entry.abilityKey ?? ''),
           icon: installed
             ? readHonmodIconDataUrl(join(libraryDirectory, entry.fileName))
             : resolveCatalogUrl(catalogBaseUrl(), entry.icon),
@@ -241,6 +242,7 @@ function registerInterProcessHandlers(): void {
         author: metadata.author,
         description: metadata.description,
         category: metadata.category,
+        abilityKey: metadata.abilityKey,
         icon: readHonmodIconDataUrl(join(libraryDirectory, fileName)),
         installed: true,
         enabled: enabledFileNames.includes(fileName),
@@ -313,6 +315,11 @@ function createMainWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
   })
 
   const rendererDevServerUrl = process.env['ELECTRON_RENDERER_URL']
