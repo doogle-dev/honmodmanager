@@ -10,7 +10,11 @@ const modManagerApi = {
   unapplyAll: () => ipcRenderer.invoke('mods:unapply'),
   launchModded: () => ipcRenderer.invoke('game:launchModded'),
   launchVanilla: () => ipcRenderer.invoke('game:launchVanilla'),
-  getAppInfo: () => ipcRenderer.invoke('app:info')
+  getAppInfo: () => ipcRenderer.invoke('app:info'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  onUpdateDownloaded: (listener: (version: string) => void) => {
+    ipcRenderer.on('updater:downloaded', (_event, version: string) => listener(version))
+  }
 }
 
 contextBridge.exposeInMainWorld('modManager', modManagerApi)

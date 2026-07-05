@@ -33,6 +33,7 @@ function App(): JSX.Element {
   const [categoryFilter, setCategoryFilter] = useState('All categories')
   const [detailMod, setDetailMod] = useState<CatalogMod | null>(null)
   const [launchingGame, setLaunchingGame] = useState(false)
+  const [updateReadyVersion, setUpdateReadyVersion] = useState('')
 
   async function loadCatalog(): Promise<void> {
     try {

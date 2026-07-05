@@ -299,7 +299,13 @@ function registerInterProcessHandlers(): void {
     catalogUrl: catalogBaseUrl(),
     libraryPath: honmodLibraryDirectory()
   }))
+
+  ipcMain.handle('updater:install', () => {
+    autoUpdater.quitAndInstall()
+  })
 }
+
+let mainWindowReference: BrowserWindow | null = null
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -317,8 +323,16 @@ function createMainWindow(): void {
     }
   })
 
+  mainWindowReference = mainWindow
+
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.on('closed', () => {
+    if (mainWindowReference === mainWindow) {
+      mainWindowReference = null
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -339,6 +353,9 @@ app.whenReady().then(() => {
   createMainWindow()
 
   if (app.isPackaged) {
+    autoUpdater.on('update-downloaded', (updateInfo) => {
+      mainWindowReference?.webContents.send('updater:downloaded', updateInfo.version)
+    })
     autoUpdater.checkForUpdatesAndNotify().catch(() => undefined)
   }
 

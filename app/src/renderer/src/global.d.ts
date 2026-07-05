@@ -34,6 +34,8 @@ interface ModManagerApi {
   unapplyAll: () => Promise<boolean>
   launchModded: () => Promise<boolean>
   launchVanilla: () => Promise<boolean>
+  installUpdate: () => Promise<void>
+  onUpdateDownloaded: (listener: (version: string) => void) => void
 }
 
 interface Window {
