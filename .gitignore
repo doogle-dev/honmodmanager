@@ -3,7 +3,11 @@
 !/.gitignore
 !/README.md
 !/app
+!/mods
+!/mod_sources
+!/server
 /app/node_modules
 /app/out
 /app/dist
 /app/dev-library
+__pycache__/

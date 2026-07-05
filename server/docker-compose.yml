@@ -1,0 +1,6 @@
+services:
+  catalog:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:80"
