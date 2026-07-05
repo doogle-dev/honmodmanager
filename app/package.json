@@ -1,6 +1,6 @@
 {
   "name": "hon-reborn-mod-manager",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A Mod manager for Heroes of Newerth Reborn",
   "author": "Doogle",
   "main": "./out/main/index.js",
