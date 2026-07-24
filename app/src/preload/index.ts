@@ -57,6 +57,7 @@ const modManagerApi = {
   createDesktopShortcuts: () => ipcRenderer.invoke('shortcuts:create'),
   getTranslationCacheInfo: () => ipcRenderer.invoke('chatTranslation:cacheInfo'),
   clearTranslationCache: () => ipcRenderer.invoke('chatTranslation:clearCache'),
+  openLogsFolder: () => ipcRenderer.invoke('logs:open'),
   onChatComposeShown: (listener: () => void) => {
     ipcRenderer.on('chatCompose:shown', () => listener())
   }

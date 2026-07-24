@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process'
 import { app } from 'electron'
+import { logLine } from './managerLogger'
 import { writeFileSync } from 'fs'
 import { join } from 'path'
 
@@ -70,12 +71,14 @@ export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
       onLine(processId, message)
     }
   })
-  child.on('exit', () => {
+  child.on('exit', (exitCode) => {
+    logLine('listener', 'debug output listener exited with code ' + String(exitCode))
     if (listenerProcess === child) {
       listenerProcess = null
     }
   })
   listenerProcess = child
+  logLine('listener', 'debug output listener started, pid ' + String(child.pid))
 }
 
 export function stopDebugOutputListener(): void {

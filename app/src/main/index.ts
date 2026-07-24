@@ -14,6 +14,7 @@ import {
   stopThaiChatTranslation
 } from './thaiChatTranslation'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
+import { logLine, logsDirectory } from './managerLogger'
 import type { Catalog } from './catalogClient'
 
 const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
@@ -220,6 +221,7 @@ function listHonmodPaths(): string[] {
 }
 
 function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
+  logLine('apply', 'applying enabled mods')
   const enabledFileNames = loadEnabledFileNames()
   const juvioRoot = locateJuvioRoot()
   const overlayPath = modsOverlayArchivePath(juvioRoot)
@@ -232,10 +234,16 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
     return { fileCount: 0, skippedMods: [] }
   }
   const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath, extraEdits)
+  logLine(
+    'apply',
+    'applied ' + result.fileCount + ' files from ' + enabledPaths.length + ' mods' +
+      (result.skippedMods.length > 0 ? ', skipped: ' + result.skippedMods.join(', ') : '')
+  )
   return { fileCount: result.fileCount, skippedMods: result.skippedMods }
 }
 
 function performModdedLaunch(): ReturnType<typeof launchGame> {
+  logLine('launch', 'modded launch requested')
   synchronizeSettingsProfiles()
   const translationSettings = loadChatTranslationSettings()
   const gameProcess = launchGame(
@@ -247,6 +255,7 @@ function performModdedLaunch(): ReturnType<typeof launchGame> {
     startThaiChatTranslation(gameProcess, translationSettings.targetLanguage)
   }
   whenGameFullyExits(gameProcess, () => {
+    logLine('launch', 'game exited, syncing login back to real profile')
     copyLoginBackToRealProfile()
   })
   focusGameWindowWhenReady()
@@ -254,6 +263,7 @@ function performModdedLaunch(): ReturnType<typeof launchGame> {
 }
 
 function performVanillaLaunch(): ReturnType<typeof launchGame> {
+  logLine('launch', 'vanilla launch requested')
   const gameProcess = launchGame(locateJuvioRoot(), false)
   focusGameWindowWhenReady()
   return gameProcess
@@ -482,6 +492,11 @@ function registerInterProcessHandlers(): void {
     return { added: addedCount }
   })
 
+  ipcMain.handle('logs:open', () => {
+    shell.openPath(logsDirectory())
+    return true
+  })
+
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
     catalogUrl: catalogBaseUrl(),
@@ -624,6 +639,9 @@ app.on('second-instance', (_event, argumentList) => {
 })
 
 app.whenReady().then(() => {
+  logLine('app', 'manager started, version ' + app.getVersion() + (app.isPackaged ? ' packaged' : ' dev'))
+  process.on('uncaughtException', (error) => logLine('error', 'uncaught exception: ' + String(error)))
+  process.on('unhandledRejection', (reason) => logLine('error', 'unhandled rejection: ' + String(reason)))
   registerInterProcessHandlers()
   registerChatComposeHandlers()
   if (startupLaunchFlag) {

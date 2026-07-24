@@ -52,6 +52,7 @@ interface ModManagerApi {
   createDesktopShortcuts: () => Promise<{ vanillaCreated: boolean; moddedCreated: boolean }>
   getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
   clearTranslationCache: () => Promise<boolean>
+  openLogsFolder: () => Promise<boolean>
   onChatComposeShown: (listener: () => void) => void
 }
 

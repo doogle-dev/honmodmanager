@@ -464,7 +464,7 @@ function App(): JSX.Element {
           )}
 
           {page === 'settings' && (
-            <div className="max-w-xl space-y-4 text-sm">
+            <div className="grid max-w-xl grid-cols-1 items-start gap-4 text-sm lg:max-w-5xl lg:grid-cols-2">
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                 <h2 className="mb-2 font-semibold text-white">{t('language')}</h2>
                 <p className="text-slate-400">{t('languageDescription')}</p>
@@ -486,34 +486,6 @@ function App(): JSX.Element {
                     ไทย
                   </button>
                 </div>
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('desktopShortcuts')}</h2>
-                <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
-                <button
-                  onClick={createDesktopShortcuts}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  {t('createShortcuts')}
-                </button>
-                {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('translationCache')}</h2>
-                <p className="text-slate-400">{t('translationCacheDescription')}</p>
-                {cacheInfo && (
-                  <p className="mt-2 text-slate-500">
-                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatMegabytes(cacheInfo.sizeBytes) })}
-                  </p>
-                )}
-                <button
-                  onClick={clearTranslationCache}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  {t('clearCache')}
-                </button>
               </div>
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                 <div className="flex items-center justify-between gap-4">
@@ -560,6 +532,45 @@ function App(): JSX.Element {
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">{t('desktopShortcuts')}</h2>
+                <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
+                <button
+                  onClick={createDesktopShortcuts}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  {t('createShortcuts')}
+                </button>
+                {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
+              </div>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">{t('translationCache')}</h2>
+                <p className="text-slate-400">{t('translationCacheDescription')}</p>
+                {cacheInfo && (
+                  <p className="mt-2 text-slate-500">
+                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatMegabytes(cacheInfo.sizeBytes) })}
+                  </p>
+                )}
+                <button
+                  onClick={clearTranslationCache}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  {t('clearCache')}
+                </button>
+              </div>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">{t('logs')}</h2>
+                <p className="text-slate-400">{t('logsDescription')}</p>
+                <button
+                  onClick={() => window.modManager.openLogsFolder()}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  {t('openLogsFolder')}
+                </button>
               </div>
             </div>
           )}

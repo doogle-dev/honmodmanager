@@ -68,6 +68,12 @@ const translations: Record<string, { en: string; th: string }> = {
   clearCache: { en: 'Clear Cache', th: 'ล้างแคช' },
   cacheCleared: { en: 'Translation cache cleared.', th: 'ล้างแคชคำแปลแล้ว' },
   language: { en: 'Language', th: 'ภาษา' },
+  logs: { en: 'Logs', th: 'บันทึกการทำงาน' },
+  logsDescription: {
+    en: 'The manager keeps a log of launches, mod applying and chat translation. Send it along when reporting a problem. Logs rotate automatically so they never grow beyond a few megabytes.',
+    th: 'ตัวจัดการม็อดบันทึกการเปิดเกม การใช้งานม็อด และการแปลแชท ส่งไฟล์นี้มาด้วยเมื่อแจ้งปัญหา บันทึกจะหมุนเวียนอัตโนมัติจึงไม่โตเกินไม่กี่เมกะไบต์'
+  },
+  openLogsFolder: { en: 'Open Logs Folder', th: 'เปิดโฟลเดอร์บันทึก' },
   languageDescription: {
     en: 'Choose the language of the mod manager.',
     th: 'เลือกภาษาของตัวจัดการม็อด'

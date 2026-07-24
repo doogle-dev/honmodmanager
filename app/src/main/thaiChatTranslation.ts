@@ -4,6 +4,7 @@ import { join } from 'path'
 import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { startDebugOutputListener, stopDebugOutputListener } from './gameDebugOutputListener'
 import { whenGameFullyExits } from './juvioLauncher'
+import { logLine } from './managerLogger'
 
 export const CHAT_RELAY_CONSOLE_COMMAND = 'Set con_debugOutput true'
 
@@ -472,6 +473,7 @@ function scheduleCacheSave(): void {
 }
 
 export function clearTranslationCache(): void {
+  logLine('translation', 'cache cleared by user')
   persistentTranslationCache.clear()
   rmSync(translationCachePath(), { force: true })
 }
@@ -512,10 +514,18 @@ async function translateWithCache(messageText: string): Promise<string> {
   if (cached !== undefined) {
     return cached
   }
-  const translatedText = await rateLimitedTranslate(messageText)
+  let translatedText = ''
+  try {
+    translatedText = await rateLimitedTranslate(messageText)
+  } catch (error) {
+    logLine('translation', 'translate failed after retry for: ' + messageText.slice(0, 80) + ' error: ' + String(error))
+    throw error
+  }
   if (translatedText) {
     persistentTranslationCache.set(cacheKey, translatedText)
     scheduleCacheSave()
+  } else {
+    logLine('translation', 'empty translation returned for: ' + messageText.slice(0, 80))
   }
   return translatedText
 }
@@ -698,6 +708,7 @@ export function registerChatComposeHandlers(): void {
     if (typeof thaiText !== 'string' || thaiText.trim() === '') {
       return false
     }
+    logLine('compose', 'sending to ' + (channelName === 'all' ? 'all' : 'team') + ' chat: ' + thaiText.trim().slice(0, 60))
     writeChatSendInbox(thaiText.trim(), channelName === 'all' ? 'all' : 'team')
     hideComposeAndRefocusGame()
     return true
@@ -752,6 +763,7 @@ function handleChannelRelayLine(line: string): boolean {
       if (!translationActive || !translatedText) {
         return
       }
+      logLine('translation', 'channel chat translated: ' + cleanMessage.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
       writeChannelTranslationInbox(prefixRaw, messageRaw, translatedText)
     })
     .catch(() => {})
@@ -760,9 +772,7 @@ function handleChannelRelayLine(line: string): boolean {
 
 function handleDebugOutputLine(_processId: number, line: string): void {
   if (line.includes('HONCHA')) {
-    try {
-      appendFileSync(join(app.getPath('userData'), 'relay-debug.log'), new Date().toISOString() + ' ' + line + '\n')
-    } catch {}
+    logLine('relay', line)
   }
   if (handleChannelRelayLine(line)) {
     return
@@ -806,6 +816,7 @@ function handleDebugOutputLine(_processId: number, line: string): void {
       if (!translationActive || !translatedText) {
         return
       }
+      logLine('translation', 'game chat translated: ' + originalText.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
       writeTranslationInbox(relayText, translatedText)
       overlayWindow?.webContents.send('chatTranslation:message', {
         id: messageId,
@@ -826,6 +837,7 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   }
   translationActive = true
   translationTargetLanguage = targetLanguage
+  logLine('translation', 'session started, target language ' + targetLanguage)
   lastRelayCounter = 0
   inboxFileIndex = 0
   lastChannelRelayCounter = 0
@@ -850,6 +862,7 @@ export function stopThaiChatTranslation(): void {
     return
   }
   translationActive = false
+  logLine('translation', 'session stopped')
   globalShortcut.unregister('Control+T')
   stopDebugOutputListener()
   if (overlayWindow) {
