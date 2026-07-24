@@ -1,8 +1,34 @@
 {
   "manager": {
-    "version": "0.1.5"
+    "version": "0.1.8"
   },
   "mods": [
+    {
+      "id": "always-buy-bar",
+      "fileName": "AlwaysBuyBar.honmod",
+      "name": "Always Buy Bar",
+      "version": "1.8",
+      "author": "Doogle",
+      "description": "Adds an always visible grid of item shortcuts next to the minimap. Click an item to buy it through the shop and the courier automatically delivers it. Click the gear to open a searchable list of every shop item and choose which ones appear, saved between games.",
+      "category": "Interface",
+      "abilityKey": "",
+      "icon": "icons/always-buy-bar.png",
+      "download": "mods/AlwaysBuyBar.honmod",
+      "sha256": "f9aecd042dbec612bfe893364a1d27fce74e21f5e0a6b97a0f927767dea1a82d"
+    },
+    {
+      "id": "bigger-minimap",
+      "fileName": "BiggerMinimap.honmod",
+      "name": "Bigger Minimap",
+      "version": "1.0",
+      "author": "Doogle",
+      "description": "Enlarges the ingame minimap so the map is easier to read at a glance. The rest of the HUD stays in place.",
+      "category": "Interface",
+      "abilityKey": "",
+      "icon": "icons/bigger-minimap.png",
+      "download": "mods/BiggerMinimap.honmod",
+      "sha256": "8b4d332de63c2a4d8beac60a10dc814039d75c1f630f207fed0f9164a21af676"
+    },
     {
       "id": "boss-timers-on-screen",
       "fileName": "BossTimersOnScreen.honmod",
@@ -236,6 +262,19 @@
       "icon": "icons/tree-stumps.png",
       "download": "mods/TreeStumps.honmod",
       "sha256": "fa6bcf0b40b43dd93b6b6712df6e2893032e15e8b59b5009340c7f7904f8afc0"
+    },
+    {
+      "id": "vignette-remover",
+      "fileName": "VignetteRemover.honmod",
+      "name": "Vignette Remover",
+      "version": "1.0",
+      "author": "Doogle",
+      "description": "Removes the dark vignette shading around the edges of the screen so the corners of your view stay bright and clear.",
+      "category": "Visibility",
+      "abilityKey": "",
+      "icon": "icons/vignette-remover.png",
+      "download": "mods/VignetteRemover.honmod",
+      "sha256": "50d0dfe70fdb510f2e4207420fe02bcfdbe7e837437c3da5ffd7875cca113742"
     }
   ]
 }

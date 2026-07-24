@@ -41,6 +41,24 @@ interface ModManagerApi {
   onUpdateProgress: (listener: (progress: UpdateProgress) => void) => void
   onUpdateCancelled: (listener: () => void) => void
   onUpdateError: (listener: (message: string) => void) => void
+  getChatTranslationEnabled: () => Promise<boolean>
+  setChatTranslationEnabled: (enabled: boolean) => Promise<boolean>
+  onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => void
+  translateForChatCompose: (englishText: string) => Promise<{ thaiText: string; backTranslation: string }>
+  sendComposedChat: (thaiText: string, channelName: string) => Promise<boolean>
+  closeChatCompose: () => Promise<boolean>
+  createDesktopShortcuts: () => Promise<{ vanillaCreated: boolean; moddedCreated: boolean }>
+  onChatComposeShown: (listener: () => void) => void
+}
+
+interface ChatTranslationMessage {
+  id: number
+  messageType: string
+  senderName: string
+  originalText: string
+  translatedText: string
+  receivedAt: number
+  displayLimit: number
 }
 
 interface UpdateProgress {

@@ -1,4 +1,4 @@
-import { openSync, readSync, fstatSync, closeSync, writeFileSync } from 'fs'
+import { openSync, readSync, fstatSync, closeSync, writeFileSync, renameSync, unlinkSync, existsSync } from 'fs'
 import { inflateRawSync, crc32 } from 'zlib'
 import { decompress as decompressZstandard } from 'fzstd'
 
@@ -232,5 +232,14 @@ export function writeZip64Archive(outputPath: string, filesByName: Map<string, B
   endOfCentralDirectory.writeUInt32LE(centralDirectorySize, 12)
   endOfCentralDirectory.writeUInt32LE(0xffffffff, 16)
 
-  writeFileSync(outputPath, Buffer.concat([...localParts, centralDirectory, zip64End, locator, endOfCentralDirectory]))
+  const temporaryPath = outputPath + '.writing'
+  writeFileSync(temporaryPath, Buffer.concat([...localParts, centralDirectory, zip64End, locator, endOfCentralDirectory]))
+  try {
+    renameSync(temporaryPath, outputPath)
+  } catch {
+    if (existsSync(temporaryPath)) {
+      unlinkSync(temporaryPath)
+    }
+    throw new Error('Could not replace ' + outputPath + '. Close the game and apply again.')
+  }
 }

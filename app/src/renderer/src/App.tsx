@@ -49,6 +49,7 @@ function App(): JSX.Element {
   const [appVersion, setAppVersion] = useState('')
   const [updateCheckMessage, setUpdateCheckMessage] = useState('')
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
+  const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
 
   async function loadCatalog(): Promise<void> {
     try {
@@ -79,6 +80,19 @@ function App(): JSX.Element {
     })
     window.modManager.getAppInfo().then((appInfo) => setAppVersion(appInfo.version))
   }, [])
+
+  async function createDesktopShortcuts(): Promise<void> {
+    try {
+      const result = await window.modManager.createDesktopShortcuts()
+      if (result.vanillaCreated && result.moddedCreated) {
+        setShortcutStatusMessage('Both shortcuts were created on your desktop.')
+      } else {
+        setShortcutStatusMessage('Shortcut creation failed. Try running the manager as administrator.')
+      }
+    } catch (error) {
+      setShortcutStatusMessage('Shortcut creation failed: ' + String(error))
+    }
+  }
 
   async function checkForUpdates(): Promise<void> {
     setCheckingForUpdates(true)
@@ -400,6 +414,22 @@ function App(): JSX.Element {
 
           {page === 'settings' && (
             <div className="max-w-xl space-y-4 text-sm">
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">Desktop Shortcuts</h2>
+                <p className="text-slate-400">
+                  Creates two desktop shortcuts, one that launches the game plain and one that launches it with your
+                  enabled mods. Both run through the manager so mods, settings and chat translation all work without
+                  opening this window first.
+                </p>
+                <button
+                  onClick={createDesktopShortcuts}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                  style={{ backgroundColor: ACCENT }}
+                >
+                  Create Shortcuts
+                </button>
+                {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
+              </div>
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                 <h2 className="mb-2 font-semibold text-white">Updates</h2>
                 <p className="text-slate-400">Current version {appVersion || 'unknown'}</p>

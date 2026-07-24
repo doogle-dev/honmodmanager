@@ -144,7 +144,18 @@ export interface ApplyResult {
   outputPath: string
 }
 
-export function applyHonmods(honmodPaths: string[], baseArchivePath: string, outputPath: string): ApplyResult {
+export interface ExtraFileEdit {
+  targetPath: string
+  find: string
+  replace: string
+}
+
+export function applyHonmods(
+  honmodPaths: string[],
+  baseArchivePath: string,
+  outputPath: string,
+  extraEdits: ExtraFileEdit[] = []
+): ApplyResult {
   const modifiedFiles = new Map<string, Buffer>()
   const baseReader = new ZipArchiveReader(baseArchivePath)
   try {
@@ -161,7 +172,7 @@ export function applyHonmods(honmodPaths: string[], baseArchivePath: string, out
               if (!fileText.includes(edit.find)) {
                 throw new Error('Text to replace was not found in ' + operation.targetPath)
               }
-              fileText = fileText.replaceAll(edit.find, edit.replace)
+              fileText = fileText.replaceAll(edit.find, () => edit.replace)
             }
             modifiedFiles.set(operation.targetPath, Buffer.from(fileText, 'utf8'))
           } else {
@@ -171,6 +182,16 @@ export function applyHonmods(honmodPaths: string[], baseArchivePath: string, out
       } finally {
         honmodReader.close()
       }
+    }
+    for (const edit of extraEdits) {
+      if (!modifiedFiles.has(edit.targetPath)) {
+        modifiedFiles.set(edit.targetPath, baseReader.readEntry(edit.targetPath))
+      }
+      const fileText = modifiedFiles.get(edit.targetPath)!.toString('utf8')
+      if (!fileText.includes(edit.find)) {
+        throw new Error('Text to replace was not found in ' + edit.targetPath)
+      }
+      modifiedFiles.set(edit.targetPath, Buffer.from(fileText.replaceAll(edit.find, () => edit.replace), 'utf8'))
     }
   } finally {
     baseReader.close()

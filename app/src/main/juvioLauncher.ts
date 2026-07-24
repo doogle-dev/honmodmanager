@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { existsSync } from 'fs'
-import { spawn } from 'child_process'
+import { spawn, ChildProcess } from 'child_process'
 
 const MODDED_LAUNCH_ARGUMENT = 'heroes of newerth;mods'
 
@@ -24,13 +24,15 @@ export function modsOverlayArchivePath(juvioRoot: string): string {
   return join(juvioRoot, 'mods', 'resources0.jz')
 }
 
-export function launchGame(juvioRoot: string, withMods: boolean): void {
+export function launchGame(juvioRoot: string, withMods: boolean, extraConsoleCommands: string[] = []): ChildProcess {
   const executablePath = join(juvioRoot, 'bin', 'juvio.exe')
   const launchArguments = withMods ? ['-mod', MODDED_LAUNCH_ARGUMENT] : []
+  launchArguments.push(...extraConsoleCommands)
   const child = spawn(executablePath, launchArguments, {
     cwd: juvioRoot,
     detached: true,
     stdio: 'ignore'
   })
   child.unref()
+  return child
 }

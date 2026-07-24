@@ -7,6 +7,16 @@ interface UpdateProgress {
   bytesPerSecond: number
 }
 
+interface ChatTranslationMessage {
+  id: number
+  messageType: string
+  senderName: string
+  originalText: string
+  translatedText: string
+  receivedAt: number
+  displayLimit: number
+}
+
 const modManagerApi = {
   listCatalog: () => ipcRenderer.invoke('catalog:list'),
   installMod: (fileName: string) => ipcRenderer.invoke('catalog:install', fileName),
@@ -32,6 +42,19 @@ const modManagerApi = {
   },
   onUpdateError: (listener: (message: string) => void) => {
     ipcRenderer.on('updater:error', (_event, message: string) => listener(message))
+  },
+  getChatTranslationEnabled: () => ipcRenderer.invoke('chatTranslation:getEnabled'),
+  setChatTranslationEnabled: (enabled: boolean) => ipcRenderer.invoke('chatTranslation:setEnabled', enabled),
+  onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => {
+    ipcRenderer.on('chatTranslation:message', (_event, message: ChatTranslationMessage) => listener(message))
+  },
+  translateForChatCompose: (englishText: string): Promise<{ thaiText: string; backTranslation: string }> =>
+    ipcRenderer.invoke('chatCompose:translate', englishText),
+  sendComposedChat: (thaiText: string, channelName: string) => ipcRenderer.invoke('chatCompose:send', thaiText, channelName),
+  closeChatCompose: () => ipcRenderer.invoke('chatCompose:close'),
+  createDesktopShortcuts: () => ipcRenderer.invoke('shortcuts:create'),
+  onChatComposeShown: (listener: () => void) => {
+    ipcRenderer.on('chatCompose:shown', () => listener())
   }
 }
 

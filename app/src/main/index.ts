@@ -2,12 +2,21 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import appIconPath from '../../resources/icon.png?asset'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
+import { spawn } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, cpSync, statSync } from 'fs'
 import { locateJuvioRoot, baseArchivePath, modsOverlayArchivePath, launchGame } from './juvioLauncher'
 import { applyHonmods, readHonmodMetadata, readHonmodIconDataUrl } from './honmodApplier'
+import {
+  chatRelayLuaEdits,
+  CHAT_RELAY_CONSOLE_COMMAND,
+  registerChatComposeHandlers,
+  startThaiChatTranslation,
+  stopThaiChatTranslation
+} from './thaiChatTranslation'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import type { Catalog } from './catalogClient'
 
+const VIRTUAL_TRANSLATION_FILE_NAME = 'ThaiChatTranslation.feature'
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
 const PUBLIC_CATALOG_URL = 'https://raw.githubusercontent.com/doogle-dev/honmodmanager/main/server/catalog'
 
@@ -28,7 +37,8 @@ function catalogBaseUrl(): string {
 
 const MOD_SETTINGS_PROFILE_NAME = 'mods'
 const REAL_SETTINGS_PROFILE_NAME = 'Heroes of Newerth'
-const SETTINGS_FILE_NAMES = ['startup.cfg', 'game_settings_local.cfg', 'voice_config.cfg', 'login.cfg']
+const SETTINGS_FILE_NAMES = ['startup.cfg', 'game_settings_local.cfg', 'voice_config.cfg']
+const LOGIN_FILE_NAME = 'login.cfg'
 
 function findJuvioDocumentsRoot(): string | null {
   const candidates = [
@@ -42,6 +52,29 @@ function findJuvioDocumentsRoot(): string | null {
     }
   }
   return null
+}
+
+const LOGIN_CVAR_PATTERN = /^\s*SetSave\s+"login_/
+
+function readUtf16ConfigLines(filePath: string): string[] {
+  return readFileSync(filePath)
+    .toString('utf16le')
+    .replace(/^﻿/, '')
+    .split(/\r?\n/)
+}
+
+function writeUtf16ConfigLines(filePath: string, configLines: string[]): void {
+  const content = configLines.filter((line) => line !== '').join('\r\n') + '\r\n'
+  writeFileSync(filePath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(content, 'utf16le')]))
+}
+
+function transplantLoginCvars(sourcePath: string, targetPath: string): void {
+  if (!existsSync(sourcePath) || !existsSync(targetPath)) {
+    return
+  }
+  const sourceLoginLines = readUtf16ConfigLines(sourcePath).filter((line) => LOGIN_CVAR_PATTERN.test(line))
+  const targetLines = readUtf16ConfigLines(targetPath).filter((line) => !LOGIN_CVAR_PATTERN.test(line))
+  writeUtf16ConfigLines(targetPath, [...targetLines, ...sourceLoginLines])
 }
 
 function synchronizeSettingsFile(realFilePath: string, modFilePath: string): void {
@@ -74,11 +107,42 @@ function synchronizeSettingsProfiles(): void {
   for (const settingsFileName of SETTINGS_FILE_NAMES) {
     synchronizeSettingsFile(join(realProfileDirectory, settingsFileName), join(modProfileDirectory, settingsFileName))
   }
+  const realLoginPath = join(realProfileDirectory, LOGIN_FILE_NAME)
+  if (existsSync(realLoginPath)) {
+    copyFileSync(realLoginPath, join(modProfileDirectory, LOGIN_FILE_NAME))
+  }
+  transplantLoginCvars(join(realProfileDirectory, 'startup.cfg'), join(modProfileDirectory, 'startup.cfg'))
   const realBindings = join(realProfileDirectory, 'bindings')
   const modBindings = join(modProfileDirectory, 'bindings')
   if (existsSync(realBindings) && !existsSync(modBindings)) {
     cpSync(realBindings, modBindings, { recursive: true })
   }
+}
+
+function copyLoginBackToRealProfile(): void {
+  const documentsRoot = findJuvioDocumentsRoot()
+  if (!documentsRoot) {
+    return
+  }
+  const modLoginPath = join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, LOGIN_FILE_NAME)
+  const realLoginPath = join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, LOGIN_FILE_NAME)
+  if (existsSync(modLoginPath)) {
+    copyFileSync(modLoginPath, realLoginPath)
+  }
+  transplantLoginCvars(
+    join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, 'startup.cfg'),
+    join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, 'startup.cfg')
+  )
+}
+
+function focusGameWindowWhenReady(): void {
+  const focusScript =
+    '$shell = New-Object -ComObject WScript.Shell; for ($attempt = 0; $attempt -lt 20; $attempt++) { Start-Sleep -Seconds 2; $gameProcess = Get-Process juvio -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; if ($gameProcess -and $shell.AppActivate($gameProcess.Id)) { Start-Sleep -Seconds 5; $shell.AppActivate($gameProcess.Id) | Out-Null; break } }'
+  const child = spawn('powershell.exe', ['-NoProfile', '-Command', focusScript], {
+    stdio: 'ignore',
+    windowsHide: true
+  })
+  child.unref()
 }
 
 function parseVersionParts(versionText: string): number[] {
@@ -106,6 +170,23 @@ function enabledStateFilePath(): string {
   return join(app.getPath('userData'), 'enabled-mods.json')
 }
 
+function chatTranslationSettingsPath(): string {
+  return join(app.getPath('userData'), 'chat-translation.json')
+}
+
+function loadChatTranslationEnabled(): boolean {
+  try {
+    const stored = JSON.parse(readFileSync(chatTranslationSettingsPath(), 'utf8'))
+    return stored.enabled === true
+  } catch {
+    return false
+  }
+}
+
+function saveChatTranslationEnabled(enabled: boolean): void {
+  writeFileSync(chatTranslationSettingsPath(), JSON.stringify({ enabled }, null, 2))
+}
+
 function loadEnabledFileNames(): string[] {
   try {
     const stored = JSON.parse(readFileSync(enabledStateFilePath(), 'utf8'))
@@ -127,6 +208,46 @@ function listHonmodPaths(): string[] {
     .map((entryName) => join(directory, entryName))
 }
 
+function performApplyEnabled(): { fileCount: number } {
+  const enabledFileNames = loadEnabledFileNames()
+  const juvioRoot = locateJuvioRoot()
+  const overlayPath = modsOverlayArchivePath(juvioRoot)
+  const enabledPaths = listHonmodPaths().filter((honmodPath) => enabledFileNames.includes(basename(honmodPath)))
+  const extraEdits = loadChatTranslationEnabled() ? chatRelayLuaEdits : []
+  if (enabledPaths.length === 0 && extraEdits.length === 0) {
+    if (existsSync(overlayPath)) {
+      rmSync(overlayPath)
+    }
+    return { fileCount: 0 }
+  }
+  const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath, extraEdits)
+  return { fileCount: result.fileCount }
+}
+
+function performModdedLaunch(): ReturnType<typeof launchGame> {
+  synchronizeSettingsProfiles()
+  const translationEnabled = loadChatTranslationEnabled()
+  const gameProcess = launchGame(
+    locateJuvioRoot(),
+    true,
+    translationEnabled ? [CHAT_RELAY_CONSOLE_COMMAND] : []
+  )
+  if (translationEnabled) {
+    startThaiChatTranslation(gameProcess)
+  }
+  gameProcess.once('exit', () => {
+    copyLoginBackToRealProfile()
+  })
+  focusGameWindowWhenReady()
+  return gameProcess
+}
+
+function performVanillaLaunch(): ReturnType<typeof launchGame> {
+  const gameProcess = launchGame(locateJuvioRoot(), false)
+  focusGameWindowWhenReady()
+  return gameProcess
+}
+
 function registerInterProcessHandlers(): void {
   ipcMain.handle('mods:list', () => {
     const enabledFileNames = loadEnabledFileNames()
@@ -145,6 +266,13 @@ function registerInterProcessHandlers(): void {
   })
 
   ipcMain.handle('mods:setEnabled', (_event, fileName: string, enabled: boolean) => {
+    if (fileName === VIRTUAL_TRANSLATION_FILE_NAME) {
+      saveChatTranslationEnabled(enabled === true)
+      if (!enabled) {
+        stopThaiChatTranslation()
+      }
+      return true
+    }
     const enabledFileNames = new Set(loadEnabledFileNames())
     if (enabled) {
       enabledFileNames.add(fileName)
@@ -155,22 +283,7 @@ function registerInterProcessHandlers(): void {
     return true
   })
 
-  ipcMain.handle('mods:apply', () => {
-    const enabledFileNames = loadEnabledFileNames()
-    const juvioRoot = locateJuvioRoot()
-    const overlayPath = modsOverlayArchivePath(juvioRoot)
-    const enabledPaths = listHonmodPaths().filter((honmodPath) =>
-      enabledFileNames.includes(basename(honmodPath))
-    )
-    if (enabledPaths.length === 0) {
-      if (existsSync(overlayPath)) {
-        rmSync(overlayPath)
-      }
-      return { fileCount: 0 }
-    }
-    const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath)
-    return { fileCount: result.fileCount }
-  })
+  ipcMain.handle('mods:apply', () => performApplyEnabled())
 
   ipcMain.handle('mods:unapply', () => {
     const juvioRoot = locateJuvioRoot()
@@ -183,13 +296,46 @@ function registerInterProcessHandlers(): void {
   })
 
   ipcMain.handle('game:launchModded', () => {
-    synchronizeSettingsProfiles()
-    launchGame(locateJuvioRoot(), true)
+    performModdedLaunch()
     return true
   })
 
   ipcMain.handle('game:launchVanilla', () => {
-    launchGame(locateJuvioRoot(), false)
+    performVanillaLaunch()
+    return true
+  })
+
+  ipcMain.handle('shortcuts:create', () => {
+    const desktopDirectory = app.getPath('desktop')
+    const juvioRoot = locateJuvioRoot()
+    const iconPath = join(juvioRoot, 'heroes of newerth', 'game.ico')
+    const shortcutIcon = existsSync(iconPath) ? iconPath : process.execPath
+    const launchArguments = (flag: string): string =>
+      app.isPackaged ? flag : '"' + app.getAppPath() + '" ' + flag
+    const vanillaCreated = shell.writeShortcutLink(join(desktopDirectory, 'Heroes of Newerth.lnk'), {
+      target: process.execPath,
+      args: launchArguments('--launch-vanilla'),
+      icon: shortcutIcon,
+      iconIndex: 0,
+      description: 'Launch Heroes of Newerth'
+    })
+    const moddedCreated = shell.writeShortcutLink(join(desktopDirectory, 'Heroes of Newerth Modded.lnk'), {
+      target: process.execPath,
+      args: launchArguments('--launch-modded'),
+      icon: shortcutIcon,
+      iconIndex: 0,
+      description: 'Launch Heroes of Newerth with mods'
+    })
+    return { vanillaCreated, moddedCreated }
+  })
+
+  ipcMain.handle('chatTranslation:getEnabled', () => loadChatTranslationEnabled())
+
+  ipcMain.handle('chatTranslation:setEnabled', (_event, enabled: boolean) => {
+    saveChatTranslationEnabled(enabled === true)
+    if (!enabled) {
+      stopThaiChatTranslation()
+    }
     return true
   })
 
@@ -254,10 +400,30 @@ function registerInterProcessHandlers(): void {
       })
     }
 
+    const translationEnabled = loadChatTranslationEnabled()
+    rows.unshift({
+      fileName: VIRTUAL_TRANSLATION_FILE_NAME,
+      name: 'Thai Chat Translation',
+      version: app.getVersion(),
+      author: 'Doogle',
+      description:
+        'Translates Thai chat messages to English inside the game chat while you play, marked with a [T] tag. Also adds a translate menu: press Ctrl+T during a match to type in English and send it as Thai to team or all chat, with a preview of exactly what will be sent. Works when the game is launched from this manager or the modded desktop shortcut.',
+      category: 'Utility',
+      abilityKey: '',
+      icon: null,
+      installed: translationEnabled,
+      enabled: translationEnabled,
+      updateAvailable: false
+    })
+
     return { mods: rows, catalogError }
   })
 
   ipcMain.handle('catalog:install', async (_event, fileName: string) => {
+    if (fileName === VIRTUAL_TRANSLATION_FILE_NAME) {
+      saveChatTranslationEnabled(true)
+      return true
+    }
     const catalog = await fetchCatalog(catalogBaseUrl())
     const entry = catalog.mods.find((mod) => mod.fileName === fileName)
     if (!entry) {
@@ -268,6 +434,11 @@ function registerInterProcessHandlers(): void {
   })
 
   ipcMain.handle('mods:uninstall', (_event, fileName: string) => {
+    if (fileName === VIRTUAL_TRANSLATION_FILE_NAME) {
+      saveChatTranslationEnabled(false)
+      stopThaiChatTranslation()
+      return true
+    }
     const honmodPath = join(honmodLibraryDirectory(), fileName)
     if (existsSync(honmodPath)) {
       rmSync(honmodPath)
@@ -361,6 +532,7 @@ function createMainWindow(): void {
     if (mainWindowReference === mainWindow) {
       mainWindowReference = null
     }
+    stopThaiChatTranslation()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -376,8 +548,71 @@ function createMainWindow(): void {
   }
 }
 
+function launchFlagFromArguments(argumentList: string[]): 'modded' | 'vanilla' | null {
+  if (argumentList.includes('--launch-modded')) {
+    return 'modded'
+  }
+  if (argumentList.includes('--launch-vanilla')) {
+    return 'vanilla'
+  }
+  return null
+}
+
+function runShortcutLaunch(launchFlag: 'modded' | 'vanilla', quitWhenGameExits: boolean): void {
+  try {
+    if (launchFlag === 'modded') {
+      performApplyEnabled()
+      const gameProcess = performModdedLaunch()
+      if (quitWhenGameExits) {
+        gameProcess.once('exit', () => {
+          setTimeout(() => app.quit(), 2000)
+        })
+      }
+    } else {
+      const gameProcess = performVanillaLaunch()
+      if (quitWhenGameExits) {
+        gameProcess.once('exit', () => {
+          setTimeout(() => app.quit(), 2000)
+        })
+      }
+    }
+  } catch {
+    if (quitWhenGameExits) {
+      app.quit()
+    }
+  }
+}
+
+const startupLaunchFlag = launchFlagFromArguments(process.argv)
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+}
+
+app.on('second-instance', (_event, argumentList) => {
+  const secondInstanceFlag = launchFlagFromArguments(argumentList)
+  if (secondInstanceFlag) {
+    runShortcutLaunch(secondInstanceFlag, false)
+    return
+  }
+  if (mainWindowReference) {
+    if (mainWindowReference.isMinimized()) {
+      mainWindowReference.restore()
+    }
+    mainWindowReference.focus()
+  } else {
+    createMainWindow()
+  }
+})
+
 app.whenReady().then(() => {
   registerInterProcessHandlers()
+  registerChatComposeHandlers()
+  if (startupLaunchFlag) {
+    runShortcutLaunch(startupLaunchFlag, true)
+    return
+  }
   createMainWindow()
 
   if (app.isPackaged) {
@@ -408,6 +643,10 @@ app.whenReady().then(() => {
       createMainWindow()
     }
   })
+})
+
+app.on('will-quit', () => {
+  stopThaiChatTranslation()
 })
 
 app.on('window-all-closed', () => {
