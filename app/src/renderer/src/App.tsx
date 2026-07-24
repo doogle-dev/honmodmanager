@@ -11,6 +11,7 @@ import {
   Settings,
   Plus
 } from 'lucide-react'
+import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './uiTranslations'
 
 type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
 
@@ -27,6 +28,28 @@ function ModIcon({ mod, size }: { mod: CatalogMod; size: string }): JSX.Element 
 
 function formatMegabytes(byteCount: number): string {
   return (byteCount / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function EnglishFlag(): JSX.Element {
+  return (
+    <svg viewBox="0 0 20 14" className="h-3.5 w-5 rounded-[2px]">
+      <rect width="20" height="14" fill="#012169" />
+      <path d="M0 0 L20 14 M20 0 L0 14" stroke="#ffffff" strokeWidth="3" />
+      <path d="M0 0 L20 14 M20 0 L0 14" stroke="#C8102E" strokeWidth="1.4" />
+      <path d="M10 0 V14 M0 7 H20" stroke="#ffffff" strokeWidth="5" />
+      <path d="M10 0 V14 M0 7 H20" stroke="#C8102E" strokeWidth="2.8" />
+    </svg>
+  )
+}
+
+function ThaiFlag(): JSX.Element {
+  return (
+    <svg viewBox="0 0 20 14" className="h-3.5 w-5 rounded-[2px]">
+      <rect width="20" height="14" fill="#A51931" />
+      <rect y="2.33" width="20" height="9.34" fill="#F4F5F8" />
+      <rect y="4.67" width="20" height="4.66" fill="#2D2A4A" />
+    </svg>
+  )
 }
 
 function formatSpeed(bytesPerSecond: number): string {
@@ -50,16 +73,25 @@ function App(): JSX.Element {
   const [updateCheckMessage, setUpdateCheckMessage] = useState('')
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
+  const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
+  const t = createTranslator(uiLanguage)
+
+  function changeUiLanguage(language: UiLanguage): void {
+    saveUiLanguage(language)
+    setUiLanguage(language)
+    window.modManager.setChatTranslationLanguage(language)
+  }
 
   async function loadCatalog(): Promise<void> {
     try {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
       if (result.catalogError) {
-        setStatus('Catalog offline. Showing installed mods only.')
+        setStatus(t('catalogOffline'))
       }
     } catch (error) {
-      setStatus('Failed to load mods: ' + String(error))
+      setStatus(t('loadFailed', { error: String(error) }))
     }
   }
 
@@ -72,22 +104,37 @@ function App(): JSX.Element {
     })
     window.modManager.onUpdateCancelled(() => {
       setDownloadProgress(null)
-      setUpdateCheckMessage('Download cancelled.')
+      setUpdateCheckMessage(t('downloadCancelled'))
     })
     window.modManager.onUpdateError((message) => {
       setDownloadProgress(null)
-      setUpdateCheckMessage('Update download failed: ' + message)
+      setUpdateCheckMessage(t('updateDownloadFailed', { error: message }))
     })
-    window.modManager.getAppInfo().then((appInfo) => setAppVersion(appInfo.version))
+    window.modManager.getAppInfo().then((appInfo) => {
+      setAppVersion(appInfo.version)
+      document.title = 'Heroes of Newerth Reborn Mod Manager v' + appInfo.version
+    })
+    window.modManager.getTranslationCacheInfo().then(setCacheInfo)
+    window.modManager.setChatTranslationLanguage(loadUiLanguage())
   }, [])
+
+  async function refreshCacheInfo(): Promise<void> {
+    setCacheInfo(await window.modManager.getTranslationCacheInfo())
+  }
+
+  async function clearTranslationCache(): Promise<void> {
+    await window.modManager.clearTranslationCache()
+    await refreshCacheInfo()
+    setStatus(t('cacheCleared'))
+  }
 
   async function createDesktopShortcuts(): Promise<void> {
     try {
       const result = await window.modManager.createDesktopShortcuts()
       if (result.vanillaCreated && result.moddedCreated) {
-        setShortcutStatusMessage('Both shortcuts were created on your desktop.')
+        setShortcutStatusMessage(t('shortcutsCreated'))
       } else {
-        setShortcutStatusMessage('Shortcut creation failed. Try running the manager as administrator.')
+        setShortcutStatusMessage(t('shortcutsFailed'))
       }
     } catch (error) {
       setShortcutStatusMessage('Shortcut creation failed: ' + String(error))
@@ -96,19 +143,19 @@ function App(): JSX.Element {
 
   async function checkForUpdates(): Promise<void> {
     setCheckingForUpdates(true)
-    setUpdateCheckMessage('Checking for updates...')
+    setUpdateCheckMessage(t('checking'))
     try {
       const result = await window.modManager.checkForUpdates()
       if (result.status === 'current') {
-        setUpdateCheckMessage('You are on the latest version.')
+        setUpdateCheckMessage(t('onLatestVersion'))
       } else if (result.status === 'downloading') {
         setUpdateReadyVersion('')
         setDownloadProgress({ percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 })
-        setUpdateCheckMessage('Update ' + result.version + ' found. Downloading now, the restart button will appear when it is ready.')
+        setUpdateCheckMessage(t('updateFound', { version: result.version ?? '' }))
       } else if (result.status === 'unavailable') {
-        setUpdateCheckMessage('Updates only work in the installed app.')
+        setUpdateCheckMessage(t('updatesUnavailable'))
       } else {
-        setUpdateCheckMessage('Update check failed: ' + (result.message ?? 'unknown error'))
+        setUpdateCheckMessage(t('updateCheckFailed', { error: result.message ?? t('unknown') }))
       }
     } finally {
       setCheckingForUpdates(false)
@@ -121,14 +168,14 @@ function App(): JSX.Element {
   }
 
   async function installMod(fileName: string): Promise<void> {
-    setStatus('Installing ' + fileName + ' ...')
+    setStatus(t('installing', { name: fileName }))
     try {
       await window.modManager.installMod(fileName)
       setDetailMod(null)
       await loadCatalog()
-      setStatus('Installed ' + fileName + '.')
+      setStatus(t('installed', { name: fileName }))
     } catch (error) {
-      setStatus('Install failed: ' + String(error))
+      setStatus(t('installFailed', { error: String(error) }))
     }
   }
 
@@ -137,9 +184,9 @@ function App(): JSX.Element {
       await window.modManager.uninstallMod(fileName)
       setDetailMod(null)
       await loadCatalog()
-      setStatus('Uninstalled ' + fileName + '.')
+      setStatus(t('uninstalled', { name: fileName }))
     } catch (error) {
-      setStatus('Uninstall failed: ' + String(error))
+      setStatus(t('uninstallFailed', { error: String(error) }))
     }
   }
 
@@ -148,27 +195,31 @@ function App(): JSX.Element {
       const result = await window.modManager.addCustomMod()
       if (result.added > 0) {
         await loadCatalog()
-        setStatus('Added ' + result.added + ' custom mod(s).')
+        setStatus(t('addedCustom', { count: result.added }))
       }
     } catch (error) {
-      setStatus('Add failed: ' + String(error))
+      setStatus(t('addFailed', { error: String(error) }))
     }
   }
 
   async function applyEnabled(): Promise<void> {
-    setStatus('Applying...')
+    setStatus(t('applying'))
     try {
       const result = await window.modManager.applyEnabled()
-      setStatus(result.fileCount === 0 ? 'No mods enabled. The overlay was cleared.' : 'Applied. Press Launch Modded to play.')
+      if (result.skippedMods && result.skippedMods.length > 0) {
+        setStatus(t('appliedSkipped', { mods: result.skippedMods.join(', ') }))
+      } else {
+        setStatus(result.fileCount === 0 ? t('noModsEnabled') : t('applied'))
+      }
     } catch (error) {
-      setStatus('Apply failed: ' + String(error))
+      setStatus(t('applyFailed', { error: String(error) }))
     }
   }
 
   async function unapplyAll(): Promise<void> {
     await window.modManager.unapplyAll()
     setMods((current) => current.map((mod) => ({ ...mod, enabled: false })))
-    setStatus('All mods unapplied.')
+    setStatus(t('allUnapplied'))
   }
 
   async function launchModded(): Promise<void> {
@@ -219,7 +270,7 @@ function App(): JSX.Element {
                 </span>
               )}
             </div>
-            <span className="text-xs text-slate-500">by {mod.author || 'unknown'}</span>
+            <span className="text-xs text-slate-500">{t('byAuthor', { author: mod.author || t('unknown') })}</span>
           </div>
         </div>
         <p className="mt-2 line-clamp-2 text-xs text-slate-400">{mod.description}</p>
@@ -239,7 +290,7 @@ function App(): JSX.Element {
               className={'rounded px-2.5 py-1 text-xs font-semibold ' + (mod.enabled ? 'text-white hover:brightness-110' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
               style={mod.enabled ? { backgroundColor: ACCENT } : undefined}
             >
-              {mod.enabled ? 'Enabled' : 'Disabled'}
+              {mod.enabled ? t('enabled') : t('disabled')}
             </button>
           )}
           {mod.installed && (
@@ -286,10 +337,10 @@ function App(): JSX.Element {
   }
 
   const pageTitles: Record<PageKey, string> = {
-    browse: 'Browse Mods',
-    installed: 'Installed Mods',
-    settings: 'Settings',
-    credits: 'Credits'
+    browse: t('browseMods'),
+    installed: t('installedMods'),
+    settings: t('settings'),
+    credits: t('credits')
   }
   const pageIcons: Record<PageKey, JSX.Element> = {
     browse: <Library className="h-6 w-6" />,
@@ -308,10 +359,10 @@ function App(): JSX.Element {
         </div>
 
         <nav className="flex flex-col gap-1">
-          {renderNavItem('browse', 'Browse mods', <Library className="h-5 w-5" />)}
-          {renderNavItem('installed', 'Installed mods', <HardDrive className="h-5 w-5" />)}
-          {renderNavItem('settings', 'Settings', <Settings className="h-5 w-5" />)}
-          {renderNavItem('credits', 'Credits', <Info className="h-5 w-5" />)}
+          {renderNavItem('browse', t('browseModsNav'), <Library className="h-5 w-5" />)}
+          {renderNavItem('installed', t('installedModsNav'), <HardDrive className="h-5 w-5" />)}
+          {renderNavItem('settings', t('settings'), <Settings className="h-5 w-5" />)}
+          {renderNavItem('credits', t('credits'), <Info className="h-5 w-5" />)}
         </nav>
 
         <div className="mt-auto flex flex-col gap-2">
@@ -321,7 +372,7 @@ function App(): JSX.Element {
             className="flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-70"
             style={{ backgroundColor: ACCENT }}
           >
-            {launchingGame ? 'Launching...' : 'Launch'}
+            {launchingGame ? t('launching') : t('launch')}
           </button>
         </div>
       </aside>
@@ -342,7 +393,7 @@ function App(): JSX.Element {
                   style={{ backgroundColor: SIDEBAR_BACKGROUND }}
                 >
                   {availableCategories.map((categoryName) => (
-                    <option key={categoryName}>{categoryName}</option>
+                    <option key={categoryName} value={categoryName}>{categoryName === 'All categories' ? t('allCategories') : categoryName}</option>
                   ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -352,7 +403,7 @@ function App(): JSX.Element {
                 <input
                   value={searchText}
                   onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Search mods"
+                  placeholder={t('searchMods')}
                   className="w-full rounded-md border border-white/20 py-2 pl-9 pr-3 text-sm text-slate-200 outline-none placeholder:text-slate-500"
                   style={{ backgroundColor: SIDEBAR_BACKGROUND }}
                 />
@@ -366,14 +417,14 @@ function App(): JSX.Element {
                 className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
                 style={{ backgroundColor: ACCENT }}
               >
-                Apply Enabled
+                {t('applyEnabled')}
               </button>
               <button
                 onClick={unapplyAll}
                 className="rounded-md px-4 py-2 text-sm font-medium text-slate-300 hover:bg-black/20"
                 style={{ backgroundColor: APP_BACKGROUND }}
               >
-                Unapply All
+                {t('unapplyAll')}
               </button>
               <button
                 onClick={addCustomMod}
@@ -381,7 +432,7 @@ function App(): JSX.Element {
                 style={{ backgroundColor: SIDEBAR_BACKGROUND }}
               >
                 <Plus className="h-4 w-4" />
-                Custom Mod
+                {t('customMod')}
               </button>
             </div>
           )}
@@ -391,7 +442,7 @@ function App(): JSX.Element {
           {page === 'browse' && (
             <>
               {filteredBrowseMods.length === 0 ? (
-                <p className="text-sm text-slate-500">No mods match your search.</p>
+                <p className="text-sm text-slate-500">{t('noModsMatch')}</p>
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {filteredBrowseMods.map(renderModCard)}
@@ -403,7 +454,7 @@ function App(): JSX.Element {
           {page === 'installed' && (
             <>
               {installedMods.length === 0 ? (
-                <p className="text-sm text-slate-500">No mods installed yet. Open Browse mods to install some.</p>
+                <p className="text-sm text-slate-500">{t('noModsInstalled')}</p>
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {installedMods.map(renderModCard)}
@@ -415,37 +466,75 @@ function App(): JSX.Element {
           {page === 'settings' && (
             <div className="max-w-xl space-y-4 text-sm">
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">Desktop Shortcuts</h2>
-                <p className="text-slate-400">
-                  Creates two desktop shortcuts, one that launches the game plain and one that launches it with your
-                  enabled mods. Both run through the manager so mods, settings and chat translation all work without
-                  opening this window first.
-                </p>
+                <h2 className="mb-2 font-semibold text-white">{t('language')}</h2>
+                <p className="text-slate-400">{t('languageDescription')}</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => changeUiLanguage('en')}
+                    className={'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ' + (uiLanguage === 'en' ? 'text-white' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
+                    style={uiLanguage === 'en' ? { backgroundColor: ACCENT } : undefined}
+                  >
+                    <EnglishFlag />
+                    English
+                  </button>
+                  <button
+                    onClick={() => changeUiLanguage('th')}
+                    className={'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ' + (uiLanguage === 'th' ? 'text-white' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
+                    style={uiLanguage === 'th' ? { backgroundColor: ACCENT } : undefined}
+                  >
+                    <ThaiFlag />
+                    ไทย
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <h2 className="mb-2 font-semibold text-white">{t('desktopShortcuts')}</h2>
+                <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
                 <button
                   onClick={createDesktopShortcuts}
                   className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
                   style={{ backgroundColor: ACCENT }}
                 >
-                  Create Shortcuts
+                  {t('createShortcuts')}
                 </button>
                 {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
               </div>
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">Updates</h2>
-                <p className="text-slate-400">Current version {appVersion || 'unknown'}</p>
+                <h2 className="mb-2 font-semibold text-white">{t('translationCache')}</h2>
+                <p className="text-slate-400">{t('translationCacheDescription')}</p>
+                {cacheInfo && (
+                  <p className="mt-2 text-slate-500">
+                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatMegabytes(cacheInfo.sizeBytes) })}
+                  </p>
+                )}
                 <button
-                  onClick={checkForUpdates}
-                  disabled={checkingForUpdates}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
+                  onClick={clearTranslationCache}
+                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
                   style={{ backgroundColor: ACCENT }}
                 >
-                  {checkingForUpdates ? 'Checking...' : 'Check for Updates'}
+                  {t('clearCache')}
                 </button>
+              </div>
+              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="mb-1 font-semibold text-white">{t('updates')}</h2>
+                    <p className="text-slate-400">{t('currentVersion')} {appVersion || t('unknown')}</p>
+                  </div>
+                  <button
+                    onClick={checkForUpdates}
+                    disabled={checkingForUpdates}
+                    className="shrink-0 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
+                    style={{ backgroundColor: ACCENT }}
+                  >
+                    {checkingForUpdates ? t('checking') : t('checkForUpdates')}
+                  </button>
+                </div>
                 {updateCheckMessage && <p className="mt-3 text-slate-400">{updateCheckMessage}</p>}
                 {downloadProgress && (
                   <div className="mt-3">
                     <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
-                      <span>Downloading update</span>
+                      <span>{t('downloadingUpdate')}</span>
                       <span>{downloadProgress.percent}%</span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
@@ -458,7 +547,7 @@ function App(): JSX.Element {
                       <span>
                         {downloadProgress.total > 0
                           ? formatMegabytes(downloadProgress.transferred) + ' / ' + formatMegabytes(downloadProgress.total)
-                          : 'Starting...'}
+                          : t('starting')}
                         {downloadProgress.bytesPerSecond > 0 && ' at ' + formatSpeed(downloadProgress.bytesPerSecond)}
                       </span>
                       <button
@@ -466,7 +555,7 @@ function App(): JSX.Element {
                         className="rounded px-2.5 py-1 font-medium text-white hover:brightness-110"
                         style={{ backgroundColor: '#5b6070' }}
                       >
-                        Cancel
+                        {t('cancel')}
                       </button>
                     </div>
                   </div>
@@ -499,13 +588,13 @@ function App(): JSX.Element {
         <span className="block h-4 min-w-0 truncate text-xs text-white">{status}</span>
         {updateReadyVersion && (
           <div className="flex shrink-0 items-center gap-2">
-            <span className="text-xs text-slate-400">Update {updateReadyVersion} ready</span>
+            <span className="text-xs text-slate-400">{t('updateReady', { version: updateReadyVersion })}</span>
             <button
               onClick={() => window.modManager.installUpdate()}
               className="rounded px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110"
               style={{ backgroundColor: ACCENT }}
             >
-              Restart Now
+              {t('restartNow')}
             </button>
           </div>
         )}
@@ -523,7 +612,7 @@ function App(): JSX.Element {
               <div className="min-w-0 flex-1">
                 <h3 className="text-lg font-semibold text-white">{detailMod.name}</h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  {detailMod.category} by {detailMod.author || 'unknown'}
+                  {detailMod.category} {t('byAuthor', { author: detailMod.author || t('unknown') })}
                 </p>
               </div>
             </div>
@@ -535,7 +624,7 @@ function App(): JSX.Element {
                   className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
                   style={{ backgroundColor: ACCENT }}
                 >
-                  Install
+                  {t('install')}
                 </button>
               )}
               {detailMod.installed && (
@@ -543,7 +632,7 @@ function App(): JSX.Element {
                   onClick={() => uninstallMod(detailMod.fileName)}
                   className="rounded-md bg-black/20 px-4 py-2 text-sm font-medium text-slate-200 hover:text-rose-400"
                 >
-                  Uninstall
+                  {t('uninstall')}
                 </button>
               )}
               <button
@@ -551,7 +640,7 @@ function App(): JSX.Element {
                 className="ml-auto rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
                 style={{ backgroundColor: '#d64c4c' }}
               >
-                Close
+                {t('close')}
               </button>
             </div>
           </div>

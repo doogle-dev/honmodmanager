@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { existsSync } from 'fs'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, exec, ChildProcess } from 'child_process'
 
 const MODDED_LAUNCH_ARGUMENT = 'heroes of newerth;mods'
 
@@ -35,4 +35,23 @@ export function launchGame(juvioRoot: string, withMods: boolean, extraConsoleCom
   })
   child.unref()
   return child
+}
+
+function isGameProcessRunning(callback: (running: boolean) => void): void {
+  exec('tasklist /FI "IMAGENAME eq juvio.exe" /FO CSV /NH', (error, stdout) => {
+    callback(!error && /juvio\.exe/i.test(stdout ?? ''))
+  })
+}
+
+export function whenGameFullyExits(gameProcess: ChildProcess, callback: () => void): void {
+  gameProcess.once('exit', () => {
+    const pollTimer = setInterval(() => {
+      isGameProcessRunning((running) => {
+        if (!running) {
+          clearInterval(pollTimer)
+          callback()
+        }
+      })
+    }, 4000)
+  })
 }

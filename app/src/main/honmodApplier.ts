@@ -142,6 +142,7 @@ export function readHonmodIconDataUrl(honmodPath: string): string | null {
 export interface ApplyResult {
   fileCount: number
   outputPath: string
+  skippedMods: string[]
 }
 
 export interface ExtraFileEdit {
@@ -156,42 +157,55 @@ export function applyHonmods(
   outputPath: string,
   extraEdits: ExtraFileEdit[] = []
 ): ApplyResult {
-  const modifiedFiles = new Map<string, Buffer>()
+  let modifiedFiles = new Map<string, Buffer>()
+  const skippedMods: string[] = []
   const baseReader = new ZipArchiveReader(baseArchivePath)
   try {
     for (const honmodPath of honmodPaths) {
+      const stagedFiles = new Map(modifiedFiles)
       const honmodReader = new ZipArchiveReader(honmodPath)
       try {
         for (const operation of parseOperations(honmodReader)) {
           if (operation.kind === 'editfile') {
-            if (!modifiedFiles.has(operation.targetPath)) {
-              modifiedFiles.set(operation.targetPath, baseReader.readEntry(operation.targetPath))
+            if (!stagedFiles.has(operation.targetPath)) {
+              stagedFiles.set(operation.targetPath, baseReader.readEntry(operation.targetPath))
             }
-            let fileText = modifiedFiles.get(operation.targetPath)!.toString('utf8')
+            let fileText = stagedFiles.get(operation.targetPath)!.toString('utf8')
             for (const edit of operation.edits) {
               if (!fileText.includes(edit.find)) {
                 throw new Error('Text to replace was not found in ' + operation.targetPath)
               }
               fileText = fileText.replaceAll(edit.find, () => edit.replace)
             }
-            modifiedFiles.set(operation.targetPath, Buffer.from(fileText, 'utf8'))
+            stagedFiles.set(operation.targetPath, Buffer.from(fileText, 'utf8'))
           } else {
-            modifiedFiles.set(operation.destinationPath, honmodReader.readEntry(operation.sourcePath))
+            stagedFiles.set(operation.destinationPath, honmodReader.readEntry(operation.sourcePath))
           }
         }
+        modifiedFiles = stagedFiles
+      } catch {
+        skippedMods.push(basename(honmodPath))
       } finally {
         honmodReader.close()
       }
     }
-    for (const edit of extraEdits) {
-      if (!modifiedFiles.has(edit.targetPath)) {
-        modifiedFiles.set(edit.targetPath, baseReader.readEntry(edit.targetPath))
+    try {
+      const stagedFiles = new Map(modifiedFiles)
+      for (const edit of extraEdits) {
+        if (!stagedFiles.has(edit.targetPath)) {
+          stagedFiles.set(edit.targetPath, baseReader.readEntry(edit.targetPath))
+        }
+        const fileText = stagedFiles.get(edit.targetPath)!.toString('utf8')
+        if (!fileText.includes(edit.find)) {
+          throw new Error('Text to replace was not found in ' + edit.targetPath)
+        }
+        stagedFiles.set(edit.targetPath, Buffer.from(fileText.replaceAll(edit.find, () => edit.replace), 'utf8'))
       }
-      const fileText = modifiedFiles.get(edit.targetPath)!.toString('utf8')
-      if (!fileText.includes(edit.find)) {
-        throw new Error('Text to replace was not found in ' + edit.targetPath)
+      modifiedFiles = stagedFiles
+    } catch {
+      if (extraEdits.length > 0) {
+        skippedMods.push('Thai Chat Translation')
       }
-      modifiedFiles.set(edit.targetPath, Buffer.from(fileText.replaceAll(edit.find, () => edit.replace), 'utf8'))
     }
   } finally {
     baseReader.close()
@@ -199,5 +213,5 @@ export function applyHonmods(
 
   mkdirSync(dirname(outputPath), { recursive: true })
   writeZip64Archive(outputPath, modifiedFiles)
-  return { fileCount: modifiedFiles.size, outputPath }
+  return { fileCount: modifiedFiles.size, outputPath, skippedMods }
 }

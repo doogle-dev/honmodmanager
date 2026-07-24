@@ -30,7 +30,7 @@ interface ModManagerApi {
   uninstallMod: (fileName: string) => Promise<boolean>
   addCustomMod: () => Promise<{ added: number }>
   setModEnabled: (fileName: string, enabled: boolean) => Promise<boolean>
-  applyEnabled: () => Promise<{ fileCount: number }>
+  applyEnabled: () => Promise<{ fileCount: number; skippedMods: string[] }>
   unapplyAll: () => Promise<boolean>
   launchModded: () => Promise<boolean>
   launchVanilla: () => Promise<boolean>
@@ -47,7 +47,11 @@ interface ModManagerApi {
   translateForChatCompose: (englishText: string) => Promise<{ thaiText: string; backTranslation: string }>
   sendComposedChat: (thaiText: string, channelName: string) => Promise<boolean>
   closeChatCompose: () => Promise<boolean>
+  getChatComposeMode: () => Promise<string>
+  setChatTranslationLanguage: (language: string) => Promise<boolean>
   createDesktopShortcuts: () => Promise<{ vanillaCreated: boolean; moddedCreated: boolean }>
+  getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
+  clearTranslationCache: () => Promise<boolean>
   onChatComposeShown: (listener: () => void) => void
 }
 

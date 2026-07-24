@@ -4,7 +4,7 @@ import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { spawn } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, cpSync, statSync } from 'fs'
-import { locateJuvioRoot, baseArchivePath, modsOverlayArchivePath, launchGame } from './juvioLauncher'
+import { locateJuvioRoot, baseArchivePath, modsOverlayArchivePath, launchGame, whenGameFullyExits } from './juvioLauncher'
 import { applyHonmods, readHonmodMetadata, readHonmodIconDataUrl } from './honmodApplier'
 import {
   chatRelayLuaEdits,
@@ -16,7 +16,7 @@ import {
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import type { Catalog } from './catalogClient'
 
-const VIRTUAL_TRANSLATION_FILE_NAME = 'ThaiChatTranslation.feature'
+const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
 const PUBLIC_CATALOG_URL = 'https://raw.githubusercontent.com/doogle-dev/honmodmanager/main/server/catalog'
 
@@ -174,17 +174,28 @@ function chatTranslationSettingsPath(): string {
   return join(app.getPath('userData'), 'chat-translation.json')
 }
 
-function loadChatTranslationEnabled(): boolean {
+function loadChatTranslationSettings(): { enabled: boolean; targetLanguage: 'en' | 'th' } {
   try {
     const stored = JSON.parse(readFileSync(chatTranslationSettingsPath(), 'utf8'))
-    return stored.enabled === true
+    return {
+      enabled: stored.enabled === true,
+      targetLanguage: stored.targetLanguage === 'th' ? 'th' : 'en'
+    }
   } catch {
-    return false
+    return { enabled: false, targetLanguage: 'en' }
   }
 }
 
+function loadChatTranslationEnabled(): boolean {
+  return loadChatTranslationSettings().enabled
+}
+
+function saveChatTranslationSettings(enabled: boolean, targetLanguage: 'en' | 'th'): void {
+  writeFileSync(chatTranslationSettingsPath(), JSON.stringify({ enabled, targetLanguage }, null, 2))
+}
+
 function saveChatTranslationEnabled(enabled: boolean): void {
-  writeFileSync(chatTranslationSettingsPath(), JSON.stringify({ enabled }, null, 2))
+  saveChatTranslationSettings(enabled, loadChatTranslationSettings().targetLanguage)
 }
 
 function loadEnabledFileNames(): string[] {
@@ -208,7 +219,7 @@ function listHonmodPaths(): string[] {
     .map((entryName) => join(directory, entryName))
 }
 
-function performApplyEnabled(): { fileCount: number } {
+function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
   const enabledFileNames = loadEnabledFileNames()
   const juvioRoot = locateJuvioRoot()
   const overlayPath = modsOverlayArchivePath(juvioRoot)
@@ -218,24 +229,24 @@ function performApplyEnabled(): { fileCount: number } {
     if (existsSync(overlayPath)) {
       rmSync(overlayPath)
     }
-    return { fileCount: 0 }
+    return { fileCount: 0, skippedMods: [] }
   }
   const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath, extraEdits)
-  return { fileCount: result.fileCount }
+  return { fileCount: result.fileCount, skippedMods: result.skippedMods }
 }
 
 function performModdedLaunch(): ReturnType<typeof launchGame> {
   synchronizeSettingsProfiles()
-  const translationEnabled = loadChatTranslationEnabled()
+  const translationSettings = loadChatTranslationSettings()
   const gameProcess = launchGame(
     locateJuvioRoot(),
     true,
-    translationEnabled ? [CHAT_RELAY_CONSOLE_COMMAND] : []
+    translationSettings.enabled ? [CHAT_RELAY_CONSOLE_COMMAND] : []
   )
-  if (translationEnabled) {
-    startThaiChatTranslation(gameProcess)
+  if (translationSettings.enabled) {
+    startThaiChatTranslation(gameProcess, translationSettings.targetLanguage)
   }
-  gameProcess.once('exit', () => {
+  whenGameFullyExits(gameProcess, () => {
     copyLoginBackToRealProfile()
   })
   focusGameWindowWhenReady()
@@ -331,6 +342,12 @@ function registerInterProcessHandlers(): void {
 
   ipcMain.handle('chatTranslation:getEnabled', () => loadChatTranslationEnabled())
 
+  ipcMain.handle('chatTranslation:setLanguage', (_event, language: string) => {
+    const settings = loadChatTranslationSettings()
+    saveChatTranslationSettings(settings.enabled, language === 'th' ? 'th' : 'en')
+    return true
+  })
+
   ipcMain.handle('chatTranslation:setEnabled', (_event, enabled: boolean) => {
     saveChatTranslationEnabled(enabled === true)
     if (!enabled) {
@@ -400,19 +417,19 @@ function registerInterProcessHandlers(): void {
       })
     }
 
-    const translationEnabled = loadChatTranslationEnabled()
+    const translationSettings = loadChatTranslationSettings()
     rows.unshift({
       fileName: VIRTUAL_TRANSLATION_FILE_NAME,
-      name: 'Thai Chat Translation',
+      name: 'Chat Translation',
       version: app.getVersion(),
       author: 'Doogle',
       description:
-        'Translates Thai chat messages to English inside the game chat while you play, marked with a [T] tag. Also adds a translate menu: press Ctrl+T during a match to type in English and send it as Thai to team or all chat, with a preview of exactly what will be sent. Works when the game is launched from this manager or the modded desktop shortcut.',
+        'Translates chat between Thai and English inside the game chat while you play, marked with a [T] tag. The direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai. Press Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent. Works when the game is launched from this manager or the modded desktop shortcut.',
       category: 'Utility',
       abilityKey: '',
       icon: null,
-      installed: translationEnabled,
-      enabled: translationEnabled,
+      installed: translationSettings.enabled,
+      enabled: translationSettings.enabled,
       updateAvailable: false
     })
 
@@ -564,15 +581,15 @@ function runShortcutLaunch(launchFlag: 'modded' | 'vanilla', quitWhenGameExits: 
       performApplyEnabled()
       const gameProcess = performModdedLaunch()
       if (quitWhenGameExits) {
-        gameProcess.once('exit', () => {
-          setTimeout(() => app.quit(), 2000)
+        whenGameFullyExits(gameProcess, () => {
+          setTimeout(() => app.quit(), 3000)
         })
       }
     } else {
       const gameProcess = performVanillaLaunch()
       if (quitWhenGameExits) {
-        gameProcess.once('exit', () => {
-          setTimeout(() => app.quit(), 2000)
+        whenGameFullyExits(gameProcess, () => {
+          setTimeout(() => app.quit(), 3000)
         })
       }
     }

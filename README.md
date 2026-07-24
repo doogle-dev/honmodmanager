@@ -1,15 +1,15 @@
 # Heroes of Newerth Reborn Mod Manager
 
-An open mod manager for Heroes of Newerth Reborn. It installs honmod files, applies them into the game, and launches the game with your mods active. It is an Electron and React desktop app that ships as a self updating Windows program.
+An open source mod manager for Heroes of Newerth Reborn. It installs honmod files, applies them into the game, and launches the game with your mods active. It is an Electron and React desktop app that updates.
 
 ## What it does
 
 - Browse a catalog of mods and install them with one click, with checksum verified downloads.
-- Add your own honmod files from disk.
+- Add your own honmod files.
 - Enable, disable, apply, and uninstall mods.
 - Launch the game modded or vanilla from the correct working directory so your in game settings are preserved.
 
-## Develop
+## For Developers
 
 The app lives in the `app` folder.
 

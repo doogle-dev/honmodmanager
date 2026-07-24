@@ -9,6 +9,7 @@ function ChatComposeWindow(): JSX.Element {
   const [backTranslationPreview, setBackTranslationPreview] = useState('')
   const [translating, setTranslating] = useState(false)
   const [sending, setSending] = useState(false)
+  const [composeMode, setComposeMode] = useState('en')
   const inputReference = useRef<HTMLInputElement>(null)
   const debounceReference = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRequestReference = useRef(0)
@@ -18,8 +19,10 @@ function ChatComposeWindow(): JSX.Element {
       setEnglishText('')
       setThaiPreview('')
       setBackTranslationPreview('')
+      window.modManager.getChatComposeMode().then(setComposeMode)
       inputReference.current?.focus()
     })
+    window.modManager.getChatComposeMode().then(setComposeMode)
     inputReference.current?.focus()
   }, [])
 
@@ -80,7 +83,9 @@ function ChatComposeWindow(): JSX.Element {
         style={{ backgroundColor: PANEL_BACKGROUND }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-white">Translate to Thai chat</span>
+          <span className="text-xs font-semibold text-white">
+            {composeMode === 'th' ? 'Translate to English chat' : 'Translate to Thai chat'}
+          </span>
           <span className="text-[11px] text-white">Enter sends to team. Esc closes.</span>
         </div>
         <input
@@ -88,11 +93,13 @@ function ChatComposeWindow(): JSX.Element {
           value={englishText}
           onChange={(event) => updateEnglishText(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your message in English"
+          placeholder={composeMode === 'th' ? 'พิมพ์ข้อความภาษาไทยที่นี่' : 'Type your message in English'}
           className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-500"
         />
         <div className="min-h-[2.25rem] rounded-md bg-black/30 px-3 py-2 text-sm text-slate-300">
-          {translating ? 'Translating...' : thaiPreview || 'Thai preview appears here'}
+          {translating
+            ? 'Translating...'
+            : thaiPreview || (composeMode === 'th' ? 'English preview appears here' : 'Thai preview appears here')}
         </div>
         {backTranslationPreview && !translating && (
           <div className="rounded-md bg-black/20 px-3 py-1.5 text-xs text-slate-400">
