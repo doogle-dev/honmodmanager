@@ -317,7 +317,9 @@ let lastRelayCounter = 0
 let inboxFileIndex = 0
 let lastChannelRelayCounter = 0
 let channelInboxFileIndex = 0
-const recentMessageTimes = new Map<string, number>()
+let pendingDuplicateText = ''
+let pendingDuplicateCounter = 0
+let pendingDuplicateTime = 0
 const recentChannelMessageTimes = new Map<string, number>()
 const persistentTranslationCache = new Map<string, string>()
 let persistentCacheLoaded = false
@@ -497,8 +499,13 @@ function rateLimitedTranslate(messageText: string): Promise<string> {
       return await translateText(messageText, translationTargetLanguage)
     } catch {
       await waitMilliseconds(1000)
-      return await translateText(messageText, translationTargetLanguage)
     }
+    try {
+      return await translateText(messageText, translationTargetLanguage)
+    } catch {
+      await waitMilliseconds(3000)
+    }
+    return await translateText(messageText, translationTargetLanguage)
   })
   translationCallChain = callPromise.then(
     () => waitMilliseconds(TRANSLATION_CALL_GAP_MILLISECONDS),
@@ -798,17 +805,17 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     return
   }
   const now = Date.now()
-  const duplicateKey = originalText
-  const previousTime = recentMessageTimes.get(duplicateKey)
-  if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+  if (
+    originalText === pendingDuplicateText &&
+    relayCounter - pendingDuplicateCounter <= 2 &&
+    now - pendingDuplicateTime < DUPLICATE_WINDOW_MILLISECONDS
+  ) {
+    pendingDuplicateText = ''
     return
   }
-  recentMessageTimes.set(duplicateKey, now)
-  for (const [key, seenTime] of recentMessageTimes) {
-    if (now - seenTime > DUPLICATE_WINDOW_MILLISECONDS) {
-      recentMessageTimes.delete(key)
-    }
-  }
+  pendingDuplicateText = originalText
+  pendingDuplicateCounter = relayCounter
+  pendingDuplicateTime = now
   messageCounter += 1
   const messageId = messageCounter
   translateWithCache(originalText)
@@ -842,6 +849,9 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   inboxFileIndex = 0
   lastChannelRelayCounter = 0
   channelInboxFileIndex = 0
+  pendingDuplicateText = ''
+  pendingDuplicateCounter = 0
+  pendingDuplicateTime = 0
   clearInboxFiles()
   clearChannelInboxFiles()
   if (OVERLAY_WINDOW_ENABLED) {
@@ -855,6 +865,10 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
       stopThaiChatTranslation()
     })
   }
+}
+
+export function isThaiChatTranslationActive(): boolean {
+  return translationActive
 }
 
 export function stopThaiChatTranslation(): void {

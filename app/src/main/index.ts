@@ -4,14 +4,22 @@ import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { spawn } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, cpSync, statSync } from 'fs'
-import { locateJuvioRoot, baseArchivePath, modsOverlayArchivePath, launchGame, whenGameFullyExits } from './juvioLauncher'
+import {
+  locateJuvioRoot,
+  baseArchivePath,
+  modsOverlayArchivePath,
+  launchGame,
+  whenGameFullyExits,
+  isGameProcessRunning
+} from './juvioLauncher'
 import { applyHonmods, readHonmodMetadata, readHonmodIconDataUrl } from './honmodApplier'
 import {
   chatRelayLuaEdits,
   CHAT_RELAY_CONSOLE_COMMAND,
   registerChatComposeHandlers,
   startThaiChatTranslation,
-  stopThaiChatTranslation
+  stopThaiChatTranslation,
+  isThaiChatTranslationActive
 } from './thaiChatTranslation'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory } from './managerLogger'
@@ -242,6 +250,28 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
   return { fileCount: result.fileCount, skippedMods: result.skippedMods }
 }
 
+function resumeTranslationSessionIfGameRunning(): void {
+  const translationSettings = loadChatTranslationSettings()
+  if (!translationSettings.enabled) {
+    return
+  }
+  isGameProcessRunning((running) => {
+    if (!running) {
+      return
+    }
+    logLine('translation', 'game already running, resuming translation session')
+    startThaiChatTranslation(null, translationSettings.targetLanguage)
+    const pollTimer = setInterval(() => {
+      isGameProcessRunning((stillRunning) => {
+        if (!stillRunning) {
+          clearInterval(pollTimer)
+          stopThaiChatTranslation()
+        }
+      })
+    }, 4000)
+  })
+}
+
 function performModdedLaunch(): ReturnType<typeof launchGame> {
   logLine('launch', 'modded launch requested')
   synchronizeSettingsProfiles()
@@ -434,7 +464,7 @@ function registerInterProcessHandlers(): void {
       version: app.getVersion(),
       author: 'Doogle',
       description:
-        'Translates chat between Thai and English inside the game chat while you play, marked with a [T] tag. The direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai. Press Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent. Works when the game is launched from this manager or the modded desktop shortcut.',
+        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag. The direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai. Press Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent.',
       category: 'Utility',
       abilityKey: '',
       icon: null,
@@ -507,27 +537,7 @@ function registerInterProcessHandlers(): void {
     autoUpdater.quitAndInstall()
   })
 
-  ipcMain.handle('updater:check', async () => {
-    if (!app.isPackaged) {
-      return { status: 'unavailable' }
-    }
-    try {
-      const checkResult = await autoUpdater.checkForUpdates()
-      const latestVersion = checkResult?.updateInfo?.version ?? ''
-      if (latestVersion && isNewerVersion(latestVersion, app.getVersion())) {
-        activeDownloadCancellationToken = new CancellationToken()
-        autoUpdater.downloadUpdate(activeDownloadCancellationToken).catch((error) => {
-          if (!activeDownloadCancellationToken?.cancelled) {
-            mainWindowReference?.webContents.send('updater:error', String(error))
-          }
-        })
-        return { status: 'downloading', version: latestVersion }
-      }
-      return { status: 'current', version: app.getVersion() }
-    } catch (error) {
-      return { status: 'error', message: String(error) }
-    }
-  })
+  ipcMain.handle('updater:check', () => performUpdateCheck())
 
   ipcMain.handle('updater:cancel', () => {
     activeDownloadCancellationToken?.cancel()
@@ -537,6 +547,50 @@ function registerInterProcessHandlers(): void {
 
 let mainWindowReference: BrowserWindow | null = null
 let activeDownloadCancellationToken: CancellationToken | null = null
+let downloadedUpdateVersion = ''
+
+const UPDATE_CHECK_INTERVAL_MILLISECONDS = 60 * 60 * 1000
+
+async function performUpdateCheck(): Promise<{ status: string; version?: string; message?: string }> {
+  if (!app.isPackaged) {
+    return { status: 'unavailable' }
+  }
+  if (downloadedUpdateVersion) {
+    return { status: 'downloading', version: downloadedUpdateVersion }
+  }
+  try {
+    const checkResult = await autoUpdater.checkForUpdates()
+    const latestVersion = checkResult?.updateInfo?.version ?? ''
+    if (latestVersion && isNewerVersion(latestVersion, app.getVersion())) {
+      if (!activeDownloadCancellationToken) {
+        activeDownloadCancellationToken = new CancellationToken()
+        autoUpdater.downloadUpdate(activeDownloadCancellationToken).catch((error) => {
+          if (!activeDownloadCancellationToken?.cancelled) {
+            mainWindowReference?.webContents.send('updater:error', String(error))
+          }
+        })
+      }
+      return { status: 'downloading', version: latestVersion }
+    }
+    return { status: 'current', version: app.getVersion() }
+  } catch (error) {
+    return { status: 'error', message: String(error) }
+  }
+}
+
+function startPeriodicUpdateChecks(): void {
+  if (!app.isPackaged) {
+    return
+  }
+  setTimeout(() => {
+    performUpdateCheck()
+  }, 15000)
+  setInterval(() => {
+    if (!downloadedUpdateVersion && !activeDownloadCancellationToken) {
+      performUpdateCheck()
+    }
+  }, UPDATE_CHECK_INTERVAL_MILLISECONDS)
+}
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -558,6 +612,26 @@ function createMainWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    if (!isThaiChatTranslationActive()) {
+      return
+    }
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      title: 'Chat translation is running',
+      message: 'Closing the mod manager will stop chat translation.',
+      detail:
+        'Chat translation is not a normal honmod. The mod manager does the translating while you play. If you close it now, chat translation and the Ctrl+T typing window stop working until you launch the game from the manager again.',
+      buttons: ['Keep Open', 'Close Anyway'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    })
+    if (choice === 0) {
+      event.preventDefault()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -649,6 +723,7 @@ app.whenReady().then(() => {
     return
   }
   createMainWindow()
+  resumeTranslationSessionIfGameRunning()
 
   if (app.isPackaged) {
     autoUpdater.autoDownload = false
@@ -662,6 +737,7 @@ app.whenReady().then(() => {
     })
     autoUpdater.on('update-downloaded', (updateInfo) => {
       activeDownloadCancellationToken = null
+      downloadedUpdateVersion = updateInfo.version
       mainWindowReference?.webContents.send('updater:downloaded', updateInfo.version)
     })
     autoUpdater.on('update-cancelled', () => {
@@ -671,6 +747,7 @@ app.whenReady().then(() => {
     autoUpdater.on('error', (updateError) => {
       mainWindowReference?.webContents.send('updater:error', String(updateError))
     })
+    startPeriodicUpdateChecks()
   }
 
   app.on('activate', () => {

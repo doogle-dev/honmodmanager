@@ -53,17 +53,48 @@ function ChatComposeWindow(): JSX.Element {
   const readyToSend = !translating && !sending && thaiPreview !== ''
 
   async function sendToChannel(channelName: 'team' | 'all'): Promise<void> {
-    if (!readyToSend) {
+    if (sending) {
       return
     }
+    if (readyToSend) {
+      setSending(true)
+      try {
+        await window.modManager.sendComposedChat(thaiPreview, channelName)
+        setEnglishText('')
+        setThaiPreview('')
+        setBackTranslationPreview('')
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+    const pendingText = englishText.trim()
+    if (pendingText === '') {
+      return
+    }
+    if (debounceReference.current) {
+      clearTimeout(debounceReference.current)
+    }
     setSending(true)
+    setTranslating(true)
+    const requestId = latestRequestReference.current + 1
+    latestRequestReference.current = requestId
     try {
-      await window.modManager.sendComposedChat(thaiPreview, channelName)
-      setEnglishText('')
-      setThaiPreview('')
-      setBackTranslationPreview('')
+      const result = await window.modManager.translateForChatCompose(pendingText)
+      if (latestRequestReference.current !== requestId) {
+        return
+      }
+      setThaiPreview(result.thaiText)
+      setBackTranslationPreview(result.backTranslation)
+      if (result.thaiText !== '') {
+        await window.modManager.sendComposedChat(result.thaiText, channelName)
+        setEnglishText('')
+        setThaiPreview('')
+        setBackTranslationPreview('')
+      }
     } finally {
       setSending(false)
+      setTranslating(false)
     }
   }
 
@@ -109,7 +140,7 @@ function ChatComposeWindow(): JSX.Element {
         <div className="flex items-center gap-2">
           <button
             onClick={() => sendToChannel('team')}
-            disabled={!readyToSend}
+            disabled={sending || englishText.trim() === ''}
             className="rounded-md px-4 py-1.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
             style={{ backgroundColor: ACCENT }}
           >
@@ -117,7 +148,7 @@ function ChatComposeWindow(): JSX.Element {
           </button>
           <button
             onClick={() => sendToChannel('all')}
-            disabled={!readyToSend}
+            disabled={sending || englishText.trim() === ''}
             className="rounded-md bg-black/40 px-4 py-1.5 text-sm font-semibold text-slate-200 hover:text-white disabled:opacity-50"
           >
             All Chat

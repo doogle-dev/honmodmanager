@@ -30,6 +30,23 @@ function formatMegabytes(byteCount: number): string {
   return (byteCount / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+function renderDescriptionText(description: string): JSX.Element {
+  const parts = description.split('**')
+  return (
+    <>
+      {parts.map((part, partIndex) =>
+        partIndex % 2 === 1 ? (
+          <strong key={partIndex} className="font-semibold text-white">
+            {part}
+          </strong>
+        ) : (
+          <span key={partIndex}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function EnglishFlag(): JSX.Element {
   return (
     <svg viewBox="0 0 20 14" className="h-3.5 w-5 rounded-[2px]">
@@ -273,7 +290,7 @@ function App(): JSX.Element {
             <span className="text-xs text-slate-500">{t('byAuthor', { author: mod.author || t('unknown') })}</span>
           </div>
         </div>
-        <p className="mt-2 line-clamp-2 text-xs text-slate-400">{mod.description}</p>
+        <p className="mt-2 line-clamp-2 text-xs text-slate-400">{renderDescriptionText(mod.description)}</p>
         <div className="mt-3 flex items-center gap-1 border-t border-white/20 pt-3">
           {!mod.installed && (
             <button
@@ -493,14 +510,24 @@ function App(): JSX.Element {
                     <h2 className="mb-1 font-semibold text-white">{t('updates')}</h2>
                     <p className="text-slate-400">{t('currentVersion')} {appVersion || t('unknown')}</p>
                   </div>
-                  <button
-                    onClick={checkForUpdates}
-                    disabled={checkingForUpdates}
-                    className="shrink-0 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
-                    style={{ backgroundColor: ACCENT }}
-                  >
-                    {checkingForUpdates ? t('checking') : t('checkForUpdates')}
-                  </button>
+                  {updateReadyVersion ? (
+                    <button
+                      onClick={() => window.modManager.installUpdate()}
+                      className="shrink-0 rounded-md px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+                      style={{ backgroundColor: '#d64c4c' }}
+                    >
+                      {t('restartNow')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={checkForUpdates}
+                      disabled={checkingForUpdates}
+                      className="shrink-0 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
+                      style={{ backgroundColor: ACCENT }}
+                    >
+                      {checkingForUpdates ? t('checking') : t('checkForUpdates')}
+                    </button>
+                  )}
                 </div>
                 {updateCheckMessage && <p className="mt-3 text-slate-400">{updateCheckMessage}</p>}
                 {downloadProgress && (
@@ -627,7 +654,7 @@ function App(): JSX.Element {
                 </p>
               </div>
             </div>
-            <p className="mt-4 whitespace-pre-line text-sm text-slate-300">{detailMod.description}</p>
+            <p className="mt-4 whitespace-pre-line text-sm text-slate-300">{renderDescriptionText(detailMod.description)}</p>
             <div className="mt-5 flex flex-wrap gap-2">
               {!detailMod.installed && (
                 <button

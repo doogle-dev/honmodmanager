@@ -47,8 +47,8 @@ const translations: Record<string, { en: string; th: string }> = {
   updateReady: { en: 'Update {version} ready', th: 'อัปเดต {version} พร้อมแล้ว' },
   desktopShortcuts: { en: 'Desktop Shortcuts', th: 'ทางลัดบนเดสก์ท็อป' },
   desktopShortcutsDescription: {
-    en: 'Creates two desktop shortcuts, one that launches the game plain and one that launches it with your enabled mods. Both run through the manager so mods, settings and chat translation all work without opening this window first.',
-    th: 'สร้างทางลัดสองอันบนเดสก์ท็อป อันหนึ่งเปิดเกมแบบปกติ อีกอันเปิดเกมพร้อมม็อดที่เปิดไว้ ทั้งสองทำงานผ่านตัวจัดการม็อด ดังนั้นม็อด การตั้งค่า และการแปลแชทจะทำงานโดยไม่ต้องเปิดหน้าต่างนี้ก่อน'
+    en: 'Creates two desktop shortcuts. The modded shortcut applies your enabled mods, starts chat translation if it is enabled, and launches the game, with the manager running quietly in the background until you close the game. The plain shortcut just launches the game with no mods and no translation.',
+    th: 'สร้างทางลัดสองอันบนเดสก์ท็อป ทางลัดแบบม็อดจะใช้ม็อดที่เปิดไว้ เริ่มการแปลแชทถ้าเปิดใช้งานอยู่ แล้วเปิดเกม โดยตัวจัดการม็อดจะทำงานเบื้องหลังจนกว่าจะปิดเกม ส่วนทางลัดแบบปกติจะเปิดเกมเฉยๆ โดยไม่มีม็อดและไม่มีการแปลแชท'
   },
   createShortcuts: { en: 'Create Shortcuts', th: 'สร้างทางลัด' },
   shortcutsCreated: {

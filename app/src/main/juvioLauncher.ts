@@ -37,7 +37,7 @@ export function launchGame(juvioRoot: string, withMods: boolean, extraConsoleCom
   return child
 }
 
-function isGameProcessRunning(callback: (running: boolean) => void): void {
+export function isGameProcessRunning(callback: (running: boolean) => void): void {
   exec('tasklist /FI "IMAGENAME eq juvio.exe" /FO CSV /NH', (error, stdout) => {
     callback(!error && /juvio\.exe/i.test(stdout ?? ''))
   })
