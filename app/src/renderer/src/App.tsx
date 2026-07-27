@@ -9,7 +9,8 @@ import {
   FileText,
   Search,
   Settings,
-  Plus
+  Plus,
+  RefreshCw
 } from 'lucide-react'
 import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './uiTranslations'
 
@@ -114,6 +115,10 @@ function App(): JSX.Element {
 
   useEffect(() => {
     loadCatalog()
+    const refreshOnFocus = (): void => {
+      loadCatalog()
+    }
+    window.addEventListener('focus', refreshOnFocus)
     window.modManager.onUpdateProgress((progress) => setDownloadProgress(progress))
     window.modManager.onUpdateDownloaded((version) => {
       setDownloadProgress(null)
@@ -133,6 +138,9 @@ function App(): JSX.Element {
     })
     window.modManager.getTranslationCacheInfo().then(setCacheInfo)
     window.modManager.setChatTranslationLanguage(loadUiLanguage())
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus)
+    }
   }, [])
 
   async function refreshCacheInfo(): Promise<void> {
@@ -182,6 +190,22 @@ function App(): JSX.Element {
   async function toggleMod(fileName: string, enabled: boolean): Promise<void> {
     await window.modManager.setModEnabled(fileName, enabled)
     setMods((current) => current.map((mod) => (mod.fileName === fileName ? { ...mod, enabled } : mod)))
+  }
+
+  async function checkForModUpdates(): Promise<void> {
+    setStatus(t('checking'))
+    try {
+      const result = await window.modManager.listCatalog()
+      setMods(result.mods)
+      if (result.catalogError) {
+        setStatus(t('catalogOffline'))
+        return
+      }
+      const updateCount = result.mods.filter((mod) => mod.updateAvailable).length
+      setStatus(updateCount > 0 ? t('modUpdatesFound', { count: updateCount }) : t('modUpdatesNone'))
+    } catch (error) {
+      setStatus(t('loadFailed', { error: String(error) }))
+    }
   }
 
   async function installMod(fileName: string): Promise<void> {
@@ -442,6 +466,14 @@ function App(): JSX.Element {
                 style={{ backgroundColor: APP_BACKGROUND }}
               >
                 {t('unapplyAll')}
+              </button>
+              <button
+                onClick={checkForModUpdates}
+                className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-slate-300 hover:bg-black/20"
+                style={{ backgroundColor: APP_BACKGROUND }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {t('checkModUpdates')}
               </button>
               <button
                 onClick={addCustomMod}

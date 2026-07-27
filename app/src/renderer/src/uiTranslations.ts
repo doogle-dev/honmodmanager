@@ -31,6 +31,9 @@ const translations: Record<string, { en: string; th: string }> = {
   details: { en: 'Details', th: 'รายละเอียด' },
   close: { en: 'Close', th: 'ปิด' },
   updateAvailable: { en: 'Update available', th: 'มีอัปเดต' },
+  checkModUpdates: { en: 'Check for Updates', th: 'ตรวจสอบอัปเดต' },
+  modUpdatesFound: { en: 'Updates available for {count} mod(s)', th: 'มีอัปเดตสำหรับม็อด {count} รายการ' },
+  modUpdatesNone: { en: 'All mods are up to date', th: 'ม็อดทั้งหมดเป็นเวอร์ชันล่าสุดแล้ว' },
   noModsMatch: { en: 'No mods match your search.', th: 'ไม่พบม็อดที่ตรงกับการค้นหา' },
   noModsInstalled: {
     en: 'No mods installed yet. Open Browse mods to install some.',
