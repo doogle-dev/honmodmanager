@@ -1,6 +1,6 @@
 {
   "manager": {
-    "version": "0.2.2"
+    "version": "0.2.3"
   },
   "mods": [
     {
@@ -40,7 +40,7 @@
       "abilityKey": "",
       "icon": "icons/boss-timers-on-screen.png",
       "download": "mods/BossTimersOnScreen.honmod",
-      "sha256": "d5eb26691b29b33ff2dcbe067befd7894c7b3a6f4c837220c3662098f1806e46"
+      "sha256": "4936bc1241ae74a9e066e69024dbc65aa7c07d541d501999d8f365d5b47bf860"
     },
     {
       "id": "brighter-ward-spots",
