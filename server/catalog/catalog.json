@@ -1,6 +1,6 @@
 {
   "manager": {
-    "version": "0.1.8"
+    "version": "0.2.2"
   },
   "mods": [
     {
@@ -33,14 +33,14 @@
       "id": "boss-timers-on-screen",
       "fileName": "BossTimersOnScreen.honmod",
       "name": "Boss Timers On Screen",
-      "version": "1.0",
+      "version": "1.1",
       "author": "Doogle",
       "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.",
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/boss-timers-on-screen.png",
       "download": "mods/BossTimersOnScreen.honmod",
-      "sha256": "5ed922011a9912dff3238ba1861863c7ba74d18b428f5f775427ace06fbc2f1a"
+      "sha256": "d5eb26691b29b33ff2dcbe067befd7894c7b3a6f4c837220c3662098f1806e46"
     },
     {
       "id": "brighter-ward-spots",

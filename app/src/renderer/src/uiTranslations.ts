@@ -66,6 +66,7 @@ const translations: Record<string, { en: string; th: string }> = {
   },
   savedTranslations: { en: '{count} saved translations, {size}', th: 'คำแปลที่บันทึกไว้ {count} รายการ, {size}' },
   clearCache: { en: 'Clear Cache', th: 'ล้างแคช' },
+  openCacheFolder: { en: 'Open Cache Folder', th: 'เปิดโฟลเดอร์แคช' },
   cacheCleared: { en: 'Translation cache cleared.', th: 'ล้างแคชคำแปลแล้ว' },
   language: { en: 'Language', th: 'ภาษา' },
   logs: { en: 'Logs', th: 'บันทึกการทำงาน' },

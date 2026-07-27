@@ -1,4 +1,4 @@
-import { BrowserWindow, app, globalShortcut, ipcMain, screen } from 'electron'
+import { BrowserWindow, app, globalShortcut, ipcMain, screen, shell } from 'electron'
 import { ChildProcess, spawn } from 'child_process'
 import { join } from 'path'
 import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
@@ -651,12 +651,77 @@ function createComposeWindow(): void {
   } else {
     window.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'chat-compose' })
   }
+  window.webContents.on('before-input-event', (inputEvent, input) => {
+    if (input.type === 'keyDown' && input.control && !input.alt && !input.shift && input.key.toLowerCase() === 't') {
+      inputEvent.preventDefault()
+      toggleComposeWindow()
+    }
+  })
   window.on('closed', () => {
     if (composeWindow === window) {
       composeWindow = null
     }
   })
   composeWindow = window
+}
+
+let foregroundWatcherProcess: ChildProcess | null = null
+let composeShortcutRegistered = false
+
+function setComposeShortcutActive(active: boolean): void {
+  if (active && !composeShortcutRegistered) {
+    composeShortcutRegistered = globalShortcut.register('Control+T', toggleComposeWindow)
+  } else if (!active && composeShortcutRegistered) {
+    globalShortcut.unregister('Control+T')
+    composeShortcutRegistered = false
+  }
+}
+
+function startForegroundWatcher(): void {
+  if (foregroundWatcherProcess) {
+    return
+  }
+  const watcherScript = [
+    "Add-Type -Namespace Win32 -Name ForegroundWindowReader -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);'",
+    "$lastName = 'startup'",
+    'while ($true) {',
+    '  $handle = [Win32.ForegroundWindowReader]::GetForegroundWindow()',
+    '  $foregroundProcessId = [uint32]0',
+    '  [void][Win32.ForegroundWindowReader]::GetWindowThreadProcessId($handle, [ref]$foregroundProcessId)',
+    "  $name = ''",
+    '  try { $name = (Get-Process -Id $foregroundProcessId -ErrorAction Stop).ProcessName } catch {}',
+    '  if ($name -ne $lastName) { $lastName = $name; [Console]::Out.WriteLine($name) }',
+    '  Start-Sleep -Milliseconds 300',
+    '}'
+  ].join('\n')
+  const watcher = spawn('powershell.exe', ['-NoProfile', '-Command', watcherScript], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true
+  })
+  watcher.stdout?.setEncoding('utf8')
+  let pendingOutput = ''
+  watcher.stdout?.on('data', (chunk: string) => {
+    pendingOutput += chunk
+    const outputLines = pendingOutput.split(/\r?\n/)
+    pendingOutput = outputLines.pop() ?? ''
+    for (const outputLine of outputLines) {
+      setComposeShortcutActive(outputLine.trim().toLowerCase() === 'juvio')
+    }
+  })
+  watcher.on('exit', () => {
+    if (foregroundWatcherProcess === watcher) {
+      foregroundWatcherProcess = null
+    }
+  })
+  foregroundWatcherProcess = watcher
+}
+
+function stopForegroundWatcher(): void {
+  setComposeShortcutActive(false)
+  if (foregroundWatcherProcess) {
+    foregroundWatcherProcess.kill()
+    foregroundWatcherProcess = null
+  }
 }
 
 function focusGameWindow(): void {
@@ -730,6 +795,16 @@ export function registerChatComposeHandlers(): void {
 
   ipcMain.handle('chatTranslation:clearCache', () => {
     clearTranslationCache()
+    return true
+  })
+
+  ipcMain.handle('chatTranslation:openCacheFolder', () => {
+    const cachePath = translationCachePath()
+    if (existsSync(cachePath)) {
+      shell.showItemInFolder(cachePath)
+    } else {
+      shell.openPath(app.getPath('userData'))
+    }
     return true
   })
 }
@@ -858,7 +933,7 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
     createOverlayWindow()
   }
   createComposeWindow()
-  globalShortcut.register('Control+T', toggleComposeWindow)
+  startForegroundWatcher()
   startDebugOutputListener(handleDebugOutputLine)
   if (gameProcess) {
     whenGameFullyExits(gameProcess, () => {
@@ -877,7 +952,7 @@ export function stopThaiChatTranslation(): void {
   }
   translationActive = false
   logLine('translation', 'session stopped')
-  globalShortcut.unregister('Control+T')
+  stopForegroundWatcher()
   stopDebugOutputListener()
   if (overlayWindow) {
     overlayWindow.close()

@@ -580,13 +580,22 @@ function App(): JSX.Element {
                     {t('savedTranslations', { count: cacheInfo.entryCount, size: formatMegabytes(cacheInfo.sizeBytes) })}
                   </p>
                 )}
-                <button
-                  onClick={clearTranslationCache}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  {t('clearCache')}
-                </button>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={clearTranslationCache}
+                    className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+                    style={{ backgroundColor: ACCENT }}
+                  >
+                    {t('clearCache')}
+                  </button>
+                  <button
+                    onClick={() => window.modManager.openTranslationCacheFolder()}
+                    className="rounded-md border border-white/20 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-black/20"
+                    style={{ backgroundColor: APP_BACKGROUND }}
+                  >
+                    {t('openCacheFolder')}
+                  </button>
+                </div>
               </div>
               <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                 <h2 className="mb-2 font-semibold text-white">{t('logs')}</h2>
@@ -613,7 +622,7 @@ function App(): JSX.Element {
                   </a>
                   .
                 </p>
-                <p className="mt-1 text-slate-400">Built on the classic honmod format for Heroes of Newerth Reborn.</p>
+                <p className="mt-1 text-slate-400">Built on the .honmod format for Heroes of Newerth Reborn.</p>
               </div>
             </div>
           )}
