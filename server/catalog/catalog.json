@@ -1,6 +1,6 @@
 {
   "manager": {
-    "version": "0.2.4"
+    "version": "0.2.5"
   },
   "mods": [
     {
@@ -13,8 +13,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/always-buy-bar.png",
+      "screenshot": "screenshots/always-buy-bar.png",
       "download": "mods/AlwaysBuyBar.honmod",
-      "sha256": "f9aecd042dbec612bfe893364a1d27fce74e21f5e0a6b97a0f927767dea1a82d"
+      "sha256": "66735ee878cf8a28cc2b30999f2f5346d1bac18d723ee02ce285798a9f0655ab"
     },
     {
       "id": "bigger-minimap",
@@ -26,8 +27,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/bigger-minimap.png",
+      "screenshot": "screenshots/bigger-minimap.png",
       "download": "mods/BiggerMinimap.honmod",
-      "sha256": "8b4d332de63c2a4d8beac60a10dc814039d75c1f630f207fed0f9164a21af676"
+      "sha256": "d0ee7b04bcbd150b0103577298182d5190dca12f1830e12807f6d0e3825ae63a"
     },
     {
       "id": "boss-timers-on-screen",
@@ -35,12 +37,13 @@
       "name": "Boss Timers On Screen",
       "version": "1.2",
       "author": "Doogle",
-      "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.",
+      "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.\n\nThe rows show dashes until the first boss data arrives in a match, then the timers keep counting on their own and resync whenever the game sends fresh data.",
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/boss-timers-on-screen.png",
+      "screenshot": "screenshots/boss-timers-on-screen.png",
       "download": "mods/BossTimersOnScreen.honmod",
-      "sha256": "9ff426913eb2a7cc670535cc25e91d3322d5939bf9866c6f998bd44a3c5fe35f"
+      "sha256": "15c93d947e0c75224c8a781a32d6dab1701f7b65183a4fd90155ca7b7d9248b9"
     },
     {
       "id": "brighter-ward-spots",
@@ -52,8 +55,9 @@
       "category": "Visibility",
       "abilityKey": "",
       "icon": "icons/brighter-ward-spots.png",
+      "screenshot": "screenshots/brighter-ward-spots.png",
       "download": "mods/BrighterWardSpots.honmod",
-      "sha256": "1b4bb054ed65738bb5955d6d58e712fea21ba4c3721b7c4ccfdfd34efde07d63"
+      "sha256": "85a4ed04de227ebaa9648efc135f24930cac02894aa6d71a2d2e4c438e3f95b8"
     },
     {
       "id": "clean-summon-alt-info",
@@ -65,8 +69,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/clean-summon-alt-info.png",
+      "screenshot": "screenshots/clean-summon-alt-info.png",
       "download": "mods/CleanSummonAltInfo.honmod",
-      "sha256": "471179e8d8725f4ba40a302bd8d56c3220cc175891bf4b925ef4674cbc41244a"
+      "sha256": "01cc2b776cd1511a53fb76de9fb6688e7316f015068b2d2dc5414f6771721ad8"
     },
     {
       "id": "click-through-top-bar",
@@ -78,8 +83,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/click-through-top-bar.png",
+      "screenshot": "screenshots/click-through-top-bar.png",
       "download": "mods/ClickThroughTopBar.honmod",
-      "sha256": "140d1d87d9f7de460d3e85b1e6552f3d4d4e1d5568c4df3c77c3225b2680bdc1"
+      "sha256": "811b3eee79608cfc40bbd4c39b44ae711237e2b25aa64ebd81ec183df3f1e8ef"
     },
     {
       "id": "compact-menu-chat",
@@ -91,8 +97,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/compact-menu-chat.png",
+      "screenshot": "screenshots/compact-menu-chat.png",
       "download": "mods/CompactMenuChat.honmod",
-      "sha256": "823a477d2e1d8bece15930cfb5da10159a1da7ecdaf151c4eafd47197a8c3f59"
+      "sha256": "57d3f1f4de4848fd54799f5554587e96bf8d671fadbb04341adf0d6fbf244b3b"
     },
     {
       "id": "astrolabe-range-ring",
@@ -104,8 +111,9 @@
       "category": "Range Rings",
       "abilityKey": "",
       "icon": "icons/astrolabe-range-ring.png",
+      "screenshot": "screenshots/astrolabe-range-ring.png",
       "download": "mods/RangeRingAstrolabe.honmod",
-      "sha256": "e56745e82e4cd40fa7c193f993a984f08fc30e15790bbf3319f0a7506ce056f6"
+      "sha256": "b91dccb831878bfa2a30c11c6070ad2c5c04026705626d6c0f2ee859590552dd"
     },
     {
       "id": "moon-queen-moon-finale-range-ring",
@@ -117,8 +125,9 @@
       "category": "Range Rings",
       "abilityKey": "R",
       "icon": "icons/moon-queen-moon-finale-range-ring.png",
+      "screenshot": "screenshots/moon-queen-moon-finale-range-ring.png",
       "download": "mods/RangeRingMoonQueenMoonFinale.honmod",
-      "sha256": "6c40e85a7aa04f5c2a977f29e22638479a2a7e0e7fd266ea42340f15fd169364"
+      "sha256": "01b44e5c94d42fa4f664e08ab56007500d608a514271779ab5981521ea700066"
     },
     {
       "id": "pharaoh-wall-of-mummies-range-ring",
@@ -130,8 +139,9 @@
       "category": "Range Rings",
       "abilityKey": "W",
       "icon": "icons/pharaoh-wall-of-mummies-range-ring.png",
+      "screenshot": "screenshots/pharaoh-wall-of-mummies-range-ring.png",
       "download": "mods/RangeRingPharaohWallOfMummies.honmod",
-      "sha256": "d94238e1190405f3541bc09890e1c63a83774f48652e9cec56ac51efac508e18"
+      "sha256": "7f6f8593b5cece6f07a4872ba0a8e1ed63e2732e03cf8141b45687a37e3cf4c3"
     },
     {
       "id": "riftwalker-wormhole-range-ring",
@@ -143,8 +153,9 @@
       "category": "Range Rings",
       "abilityKey": "R",
       "icon": "icons/riftwalker-wormhole-range-ring.png",
+      "screenshot": "screenshots/riftwalker-wormhole-range-ring.png",
       "download": "mods/RangeRingRiftwalkerWormhole.honmod",
-      "sha256": "180fc47004f306e617f4f35cb4860ea2966b494de84d61880c8d2346a8bfa719"
+      "sha256": "0e5bcb49cfe73ed4b351460f27d2353bf22f47f962fc20356dc0f3e34f5e389d"
     },
     {
       "id": "soul-reaper-judgement-range-ring",
@@ -156,8 +167,9 @@
       "category": "Range Rings",
       "abilityKey": "Q",
       "icon": "icons/soul-reaper-judgement-range-ring.png",
+      "screenshot": "screenshots/soul-reaper-judgement-range-ring.png",
       "download": "mods/RangeRingSoulReaperJudgement.honmod",
-      "sha256": "a7ed38d915b2451855f3879752907b21fab8579005c5dec79d3fa90937f4bb64"
+      "sha256": "4d28efc598465dd18f92f2c543168726e4ef9df3f0cbb472f1e29698fdff542e"
     },
     {
       "id": "soulstealer-demon-hand-range-rings",
@@ -169,8 +181,9 @@
       "category": "Range Rings",
       "abilityKey": "QWE",
       "icon": "icons/soulstealer-demon-hand-range-rings.png",
+      "screenshot": "screenshots/soulstealer-demon-hand-range-rings.png",
       "download": "mods/RangeRingSoulstealerDemonHand.honmod",
-      "sha256": "34f5af3af96a2d62b8e9b379f461f527f94ef6cc12eadf0c3bc6034a27230e31"
+      "sha256": "6d949ead9743012961603087a8b2cd3d75d6f8b36f5209d70bd161b4aea0455e"
     },
     {
       "id": "tower-range-rings",
@@ -182,8 +195,9 @@
       "category": "Range Rings",
       "abilityKey": "",
       "icon": "icons/tower-range-rings.png",
+      "screenshot": "screenshots/tower-range-rings.png",
       "download": "mods/RangeRingTowers.honmod",
-      "sha256": "0179c62772da188b502192a0ea626b2ee431daf71008809e1a3a01d503860834"
+      "sha256": "671879c928a3095b9cfc05e1bf1f1c6d70987cdd3b154f8ff78cb871135a918a"
     },
     {
       "id": "custom-cursor-ember",
@@ -195,8 +209,9 @@
       "category": "Cursors",
       "abilityKey": "",
       "icon": "icons/custom-cursor-ember.png",
+      "screenshot": "screenshots/custom-cursor-ember.png",
       "download": "mods/RebornCursorEmber.honmod",
-      "sha256": "c76def67345ec2aea7caedfab06668d0e62df85df7017157e0c5c592c5aa7794"
+      "sha256": "f5fef0ff14f711813ca7f560ecee9740ff46b04693ada916b95c40db05be30d9"
     },
     {
       "id": "custom-cursor-frost",
@@ -208,8 +223,9 @@
       "category": "Cursors",
       "abilityKey": "",
       "icon": "icons/custom-cursor-frost.png",
+      "screenshot": "screenshots/custom-cursor-frost.png",
       "download": "mods/RebornCursorFrost.honmod",
-      "sha256": "aea7143db6f4b8541fde56030a13cc964687e23583f53ecb946c3cf4112e1068"
+      "sha256": "5f78e5c0d94f6f415436adca60b5f67ae44e84c3ab73899a48f14fac557797e9"
     },
     {
       "id": "custom-cursor-void",
@@ -221,8 +237,9 @@
       "category": "Cursors",
       "abilityKey": "",
       "icon": "icons/custom-cursor-void.png",
+      "screenshot": "screenshots/custom-cursor-void.png",
       "download": "mods/RebornCursorVoid.honmod",
-      "sha256": "5b696203f11649ed49143b46283addbe6d2bc97b6e613e3f83adf6d41051ed2f"
+      "sha256": "92d8b761f3434fee1e27b53cd9b5ecd1a414ed161e2e6777c509d48377ad031f"
     },
     {
       "id": "rhapsody-melody-range-ring",
@@ -234,8 +251,9 @@
       "category": "Range Rings",
       "abilityKey": "R",
       "icon": "icons/rhapsody-melody-range-ring.png",
+      "screenshot": "screenshots/rhapsody-melody-range-ring.png",
       "download": "mods/RebornRangeRingRhapsodyMelody.honmod",
-      "sha256": "51cd8496ded290f7686010aeda10382742106b3cdcec9379a10c04ca35770d3a"
+      "sha256": "bf5810778fe922c2c48e91a0585960353397c0f1218066e494a69a5fe636a245"
     },
     {
       "id": "remove-death-screen-effects",
@@ -247,8 +265,9 @@
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/remove-death-screen-effects.png",
+      "screenshot": "screenshots/remove-death-screen-effects.png",
       "download": "mods/RemoveDeathScreenEffects.honmod",
-      "sha256": "4c313c4f8cc0fcb25891f24b846f047b1fea0da3cf6cc5495912a65da2699499"
+      "sha256": "d8ba28939320072bf899b0e27d6aba11ae6358ebd052099f4d3c8c52085e0394"
     },
     {
       "id": "tree-stumps",
@@ -260,8 +279,9 @@
       "category": "Visibility",
       "abilityKey": "",
       "icon": "icons/tree-stumps.png",
+      "screenshot": "",
       "download": "mods/TreeStumps.honmod",
-      "sha256": "fa6bcf0b40b43dd93b6b6712df6e2893032e15e8b59b5009340c7f7904f8afc0"
+      "sha256": "70a480fdca7a8f9266223bc09d8c4c4e5c2597dba4a2893634f603f87fa89c04"
     },
     {
       "id": "vignette-remover",
@@ -273,8 +293,9 @@
       "category": "Visibility",
       "abilityKey": "",
       "icon": "icons/vignette-remover.png",
+      "screenshot": "screenshots/vignette-remover.png",
       "download": "mods/VignetteRemover.honmod",
-      "sha256": "50d0dfe70fdb510f2e4207420fe02bcfdbe7e837437c3da5ffd7875cca113742"
+      "sha256": "30a81124c8c19971a6142614f3766431b77f63ace87ed01f40f065db3d271056"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import appIconPath from '../../resources/icon.png?asset'
+import chatTranslationScreenshotPath from '../../resources/chat_translation_screenshot.png?asset'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { spawn } from 'child_process'
@@ -429,8 +430,9 @@ function registerInterProcessHandlers(): void {
           category: entry.category,
           abilityKey: installed ? installed.abilityKey : (entry.abilityKey ?? ''),
           icon: installed
-            ? readHonmodIconDataUrl(join(libraryDirectory, entry.fileName))
+            ? (readHonmodIconDataUrl(join(libraryDirectory, entry.fileName)) ?? resolveCatalogUrl(catalogBaseUrl(), entry.icon))
             : resolveCatalogUrl(catalogBaseUrl(), entry.icon),
+          screenshot: entry.screenshot ? resolveCatalogUrl(catalogBaseUrl(), entry.screenshot) : null,
           installed: installed !== undefined,
           enabled: enabledFileNames.includes(entry.fileName),
           updateAvailable: installed !== undefined && isNewerVersion(entry.version, installed.version)
@@ -451,6 +453,7 @@ function registerInterProcessHandlers(): void {
         category: metadata.category,
         abilityKey: metadata.abilityKey,
         icon: readHonmodIconDataUrl(join(libraryDirectory, fileName)),
+        screenshot: null,
         installed: true,
         enabled: enabledFileNames.includes(fileName),
         updateAvailable: false
@@ -464,10 +467,13 @@ function registerInterProcessHandlers(): void {
       version: app.getVersion(),
       author: 'Doogle',
       description:
-        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag. The direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai. Press Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent.',
+        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\n\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag.\n\nThe direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai.\n\nPress Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent.',
       category: 'Utility',
       abilityKey: '',
       icon: null,
+      screenshot: existsSync(chatTranslationScreenshotPath)
+        ? 'data:image/png;base64,' + readFileSync(chatTranslationScreenshotPath).toString('base64')
+        : null,
       installed: translationSettings.enabled,
       enabled: translationSettings.enabled,
       updateAvailable: false
@@ -594,12 +600,13 @@ function startPeriodicUpdateChecks(): void {
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
-    width: 1280,
+    width: 1120,
     height: 720,
     minWidth: 900,
     minHeight: 600,
+    maxWidth: 1280,
     show: false,
-    backgroundColor: '#313747',
+    backgroundColor: '#191a1b',
     icon: appIconPath,
     autoHideMenuBar: true,
     webPreferences: {

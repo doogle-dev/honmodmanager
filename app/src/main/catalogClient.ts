@@ -12,6 +12,7 @@ export interface CatalogModEntry {
   category: string
   abilityKey: string
   icon: string
+  screenshot?: string
   download: string
   sha256: string
 }

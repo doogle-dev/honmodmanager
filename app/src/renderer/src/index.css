@@ -11,3 +11,30 @@ body,
 body {
   margin: 0;
 }
+
+:root {
+  color-scheme: dark;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #191a1b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #6b6f76;
+  border-radius: 5px;
+  border: 2px solid #191a1b;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8b8f96;
+}
+
+::-webkit-scrollbar-corner {
+  background: #191a1b;
+}

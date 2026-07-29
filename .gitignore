@@ -10,3 +10,5 @@
 /app/dist
 /app/dev-library
 __pycache__/
+mod_sources/*/*_screenshot.png
+mod_sources/cursors/*_screenshot.png

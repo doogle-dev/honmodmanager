@@ -6,25 +6,41 @@ import {
   Info,
   Download,
   Trash2,
-  FileText,
   Search,
   Settings,
   Plus,
-  RefreshCw
+  Puzzle,
+  RefreshCw,
+  Github
 } from 'lucide-react'
 import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './uiTranslations'
 
 type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
 
-const ACCENT = '#7287d9'
-const APP_BACKGROUND = '#313747'
-const SIDEBAR_BACKGROUND = '#1b1c21'
+const ACCENT = '#3b6ea5'
+const ACCENT_TEXT = '#ffffff'
+const APP_BACKGROUND = '#191a1b'
+const SIDEBAR_BACKGROUND = '#191a1b'
+const CHROME_BACKGROUND = '#121314'
 
 function ModIcon({ mod, size }: { mod: CatalogMod; size: string }): JSX.Element {
   if (mod.icon) {
     return <img src={mod.icon} alt="" className={size + ' object-contain'} />
   }
-  return <div className={size + ' rounded bg-black/30'} />
+  if (mod.fileName === 'ChatTranslation.feature') {
+    return (
+      <div className={size + ' flex items-center justify-center gap-0.5 rounded bg-black/30 text-white'}>
+        <span className="text-sm font-bold leading-none">ก</span>
+        <span className="text-[10px] leading-none text-slate-400">→</span>
+        <span className="text-sm font-bold leading-none">A</span>
+      </div>
+    )
+  }
+  return (
+    <div className={size + ' flex items-center justify-center rounded bg-black/30'}>
+      <Puzzle className="h-1/2 w-1/2 text-slate-400" />
+    </div>
+  )
 }
 
 function formatMegabytes(byteCount: number): string {
@@ -83,7 +99,7 @@ function App(): JSX.Element {
   const [page, setPage] = useState<PageKey>('browse')
   const [searchText, setSearchText] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All categories')
-  const [detailMod, setDetailMod] = useState<CatalogMod | null>(null)
+  const [selectedModFileName, setSelectedModFileName] = useState<string | null>(null)
   const [launchingGame, setLaunchingGame] = useState(false)
   const [updateReadyVersion, setUpdateReadyVersion] = useState('')
   const [downloadProgress, setDownloadProgress] = useState<UpdateProgress | null>(null)
@@ -208,11 +224,25 @@ function App(): JSX.Element {
     }
   }
 
+  async function updateAllMods(): Promise<void> {
+    const updatableMods = mods.filter((mod) => mod.installed && mod.updateAvailable)
+    for (const mod of updatableMods) {
+      setStatus(t('installing', { name: mod.fileName }))
+      try {
+        await window.modManager.installMod(mod.fileName)
+      } catch (error) {
+        setStatus(t('installFailed', { error: String(error) }))
+        return
+      }
+    }
+    await loadCatalog()
+    setStatus(t('modsUpdated', { count: updatableMods.length }))
+  }
+
   async function installMod(fileName: string): Promise<void> {
     setStatus(t('installing', { name: fileName }))
     try {
       await window.modManager.installMod(fileName)
-      setDetailMod(null)
       await loadCatalog()
       setStatus(t('installed', { name: fileName }))
     } catch (error) {
@@ -223,7 +253,6 @@ function App(): JSX.Element {
   async function uninstallMod(fileName: string): Promise<void> {
     try {
       await window.modManager.uninstallMod(fileName)
-      setDetailMod(null)
       await loadCatalog()
       setStatus(t('uninstalled', { name: fileName }))
     } catch (error) {
@@ -288,48 +317,151 @@ function App(): JSX.Element {
     const matchesCategory = categoryFilter === 'All categories' || (mod.category || 'Other') === categoryFilter
     return matchesSearch && matchesCategory
   })
+  const selectedBrowseMod =
+    filteredBrowseMods.find((mod) => mod.fileName === selectedModFileName) ?? filteredBrowseMods[0] ?? null
+  const selectedInstalledMod =
+    installedMods.find((mod) => mod.fileName === selectedModFileName) ?? installedMods[0] ?? null
+  const pendingUpdateCount = mods.filter((mod) => mod.installed && mod.updateAvailable).length
 
-  function renderModCard(mod: CatalogMod): JSX.Element {
+  function renderAbilityKeyChips(mod: CatalogMod): JSX.Element | null {
+    if (!mod.abilityKey) {
+      return null
+    }
+    return (
+      <span className="flex shrink-0 gap-1">
+        {mod.abilityKey.split('').map((abilityLetter) => (
+          <span key={abilityLetter} className="rounded bg-black px-1.5 py-0.5 text-xs font-bold text-white">
+            {abilityLetter}
+          </span>
+        ))}
+      </span>
+    )
+  }
+
+  function renderModListRow(mod: CatalogMod, isSelected: boolean): JSX.Element {
     return (
       <div
         key={mod.fileName}
-        className="flex flex-col rounded-lg border border-white/20 p-4"
-        style={{ backgroundColor: SIDEBAR_BACKGROUND }}
+        onClick={() => setSelectedModFileName(mod.fileName)}
+        className={'flex cursor-pointer items-center gap-3 px-4 py-2.5 ' + (isSelected ? '' : 'hover:bg-black/20')}
+        style={isSelected ? { boxShadow: 'inset 3px 0 0 ' + ACCENT, backgroundColor: 'rgba(59, 110, 165, 0.16)' } : undefined}
       >
-        <div className="flex items-start gap-3">
-          <ModIcon mod={mod} size="h-11 w-11" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="truncate text-sm font-semibold text-white">{mod.name}</span>
-              {mod.abilityKey && (
-                <span className="flex shrink-0 gap-1">
-                  {mod.abilityKey.split('').map((abilityLetter) => (
-                    <span key={abilityLetter} className="rounded bg-black px-1.5 py-0.5 text-xs font-bold text-white">
-                      {abilityLetter}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </div>
-            <span className="text-xs text-slate-500">{t('byAuthor', { author: mod.author || t('unknown') })}</span>
+        <ModIcon mod={mod} size="h-14 w-14" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="truncate text-[13px] font-semibold leading-tight text-white">{mod.name}</span>
+            {mod.fileName === 'ChatTranslation.feature' && (
+              <span className="flex shrink-0 items-center gap-1 self-center">
+                <ThaiFlag />
+                <EnglishFlag />
+              </span>
+            )}
+            {renderAbilityKeyChips(mod)}
+            <span className="shrink-0 text-[11px] text-white">{t('byAuthor', { author: mod.author || t('unknown') })}</span>
           </div>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-400">{renderDescriptionText(mod.description)}</p>
         </div>
-        <p className="mt-2 line-clamp-2 text-xs text-slate-400">{renderDescriptionText(mod.description)}</p>
-        <div className="mt-3 flex items-center gap-1 border-t border-white/20 pt-3">
+        <div className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
           {!mod.installed && (
             <button
               onClick={() => installMod(mod.fileName)}
-              title="Install"
+              title={t('install')}
               className="rounded p-1.5 text-slate-300 hover:bg-black/20 hover:text-white"
             >
               <Download className="h-4 w-4" />
             </button>
           )}
+          {mod.installed && mod.updateAvailable && (
+            <button
+              onClick={() => installMod(mod.fileName)}
+              title={t('updateAvailable')}
+              className="rounded p-1.5 text-white hover:bg-black/20"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          )}
           {mod.installed && (
             <button
               onClick={() => toggleMod(mod.fileName, !mod.enabled)}
-              className={'rounded px-2.5 py-1 text-xs font-semibold ' + (mod.enabled ? 'text-white hover:brightness-110' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
-              style={mod.enabled ? { backgroundColor: ACCENT } : undefined}
+              className={'w-[76px] rounded py-1 text-center text-xs font-normal ' + (mod.enabled ? 'text-white' : 'bg-black/30 text-slate-400')}
+              style={mod.enabled ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
+            >
+              {mod.enabled ? t('enabled') : t('disabled')}
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  function renderModDetailPanel(mod: CatalogMod | null): JSX.Element {
+    if (!mod) {
+      return <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500">{t('selectMod')}</div>
+    }
+    const infoRows: [string, string][] = [
+      [t('infoVersion'), mod.version ? 'v' + mod.version : t('unknown')],
+      [t('infoAuthor'), mod.author || t('unknown')],
+      [t('infoCategory'), mod.category || 'Other'],
+      [t('infoFileName'), mod.fileName]
+    ]
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
+          <ModIcon mod={mod} size="h-16 w-16" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-[13px] font-semibold text-white">{mod.name}</h3>
+              {mod.fileName === 'ChatTranslation.feature' && (
+                <span className="flex shrink-0 items-center gap-1">
+                  <ThaiFlag />
+                  <EnglishFlag />
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-white">{t('byAuthor', { author: mod.author || t('unknown') })}</p>
+          </div>
+          {mod.installed && mod.updateAvailable && (
+            <span className="shrink-0 rounded bg-[#35753a] px-3 py-1 text-xs font-normal text-white">
+              {t('updateAvailable')}
+            </span>
+          )}
+          {renderAbilityKeyChips(mod)}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="px-4 py-3">
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('modInfoHeading')}</h4>
+            <div className="flex flex-col gap-1">
+              {infoRows.map(([infoLabel, infoValue]) => (
+                <div key={infoLabel} className="flex justify-between gap-3 text-xs">
+                  <span className="shrink-0 text-slate-400">{infoLabel}</span>
+                  <span className="truncate text-slate-200">{infoValue}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="px-4 py-3">
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('descriptionHeading')}</h4>
+            <p className="whitespace-pre-line text-[13px] leading-relaxed text-slate-300">{renderDescriptionText(mod.description)}</p>
+            {mod.screenshot && (
+              <img src={mod.screenshot} alt="" className="mt-3 w-full rounded border border-white/10" />
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 border-t border-white/10 px-4 py-3">
+          {!mod.installed && (
+            <button
+              onClick={() => installMod(mod.fileName)}
+              className="rounded px-5 py-1.5 text-[13px] font-normal hover:brightness-125"
+              style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
+            >
+              {t('install')}
+            </button>
+          )}
+          {mod.installed && (
+            <button
+              onClick={() => toggleMod(mod.fileName, !mod.enabled)}
+              className={'w-[92px] rounded py-1.5 text-center text-[13px] font-normal ' + (mod.enabled ? 'hover:brightness-125' : 'bg-black/30 text-slate-300')}
+              style={mod.enabled ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
             >
               {mod.enabled ? t('enabled') : t('disabled')}
             </button>
@@ -337,28 +469,12 @@ function App(): JSX.Element {
           {mod.installed && (
             <button
               onClick={() => uninstallMod(mod.fileName)}
-              title="Uninstall"
-              className="rounded p-1.5 text-slate-300 hover:bg-black/20 hover:text-rose-400"
+              className="ml-auto flex items-center gap-1.5 rounded border border-[#c96a6a]/50 px-4 py-1.5 text-[13px] font-normal text-[#e08a8a] hover:bg-[#c96a6a]/20"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('uninstall')}
             </button>
           )}
-          {mod.installed && mod.updateAvailable && (
-            <button
-              onClick={() => installMod(mod.fileName)}
-              title="Update available"
-              className="rounded p-1.5 text-amber-400 hover:bg-black/20"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            onClick={() => setDetailMod(mod)}
-            title="Details"
-            className="ml-auto rounded p-1.5 text-slate-300 hover:bg-black/20 hover:text-white"
-          >
-            <FileText className="h-4 w-4" />
-          </button>
         </div>
       </div>
     )
@@ -369,7 +485,7 @@ function App(): JSX.Element {
     return (
       <button
         onClick={() => setPage(key)}
-        className={'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ' + (isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-black/20')}
+        className={'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ' + (isActive ? 'text-white' : 'text-slate-400 hover:bg-black/20')}
       >
         {icon}
         {label}
@@ -393,9 +509,9 @@ function App(): JSX.Element {
   return (
     <div className="flex h-screen flex-col text-slate-200" style={{ backgroundColor: APP_BACKGROUND }}>
       <div className="flex min-h-0 flex-1">
-      <aside className="flex w-56 flex-col border-r border-white/20 p-3" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+      <aside className="flex w-56 flex-col border-r border-white/20 p-3" style={{ backgroundColor: CHROME_BACKGROUND }}>
         <div className="mb-5 flex items-center gap-2 px-2 pt-2">
-          <Settings className="h-7 w-7" style={{ color: ACCENT }} />
+          <Settings className="h-7 w-7 text-white" />
           <div className="text-sm font-bold text-white">MOD MANAGER</div>
         </div>
 
@@ -410,8 +526,8 @@ function App(): JSX.Element {
           <button
             onClick={launchModded}
             disabled={launchingGame}
-            className="flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-70"
-            style={{ backgroundColor: ACCENT }}
+            className="flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white hover:brightness-125 disabled:opacity-70"
+            style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
           >
             {launchingGame ? t('launching') : t('launch')}
           </button>
@@ -419,10 +535,10 @@ function App(): JSX.Element {
       </aside>
 
       <main className="flex flex-1 flex-col overflow-hidden">
-        <header className="border-b border-white/20 px-8 py-5" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-          <div className="flex items-center gap-3" style={{ color: ACCENT }}>
+        <header className="border-b border-white/20 px-6 py-3.5" style={{ backgroundColor: CHROME_BACKGROUND }}>
+          <div className="flex items-center gap-2.5 text-white">
             {pageIcons[page]}
-            <h1 className="text-xl font-bold text-white">{pageTitles[page]}</h1>
+            <h1 className="text-lg font-bold text-white">{pageTitles[page]}</h1>
           </div>
           {page === 'browse' && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -430,7 +546,7 @@ function App(): JSX.Element {
                 <select
                   value={categoryFilter}
                   onChange={(event) => setCategoryFilter(event.target.value)}
-                  className="appearance-none rounded-md border border-white/20 py-2 pl-3 pr-9 text-sm text-slate-200 outline-none"
+                  className="appearance-none rounded-md border border-white/20 py-1.5 pl-3 pr-9 text-[13px] text-slate-200 outline-none"
                   style={{ backgroundColor: SIDEBAR_BACKGROUND }}
                 >
                   {availableCategories.map((categoryName) => (
@@ -445,7 +561,7 @@ function App(): JSX.Element {
                   value={searchText}
                   onChange={(event) => setSearchText(event.target.value)}
                   placeholder={t('searchMods')}
-                  className="w-full rounded-md border border-white/20 py-2 pl-9 pr-3 text-sm text-slate-200 outline-none placeholder:text-slate-500"
+                  className="w-full rounded-md border border-white/20 py-1.5 pl-9 pr-3 text-[13px] text-slate-200 outline-none placeholder:text-slate-500"
                   style={{ backgroundColor: SIDEBAR_BACKGROUND }}
                 />
               </div>
@@ -455,29 +571,31 @@ function App(): JSX.Element {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 onClick={applyEnabled}
-                className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                style={{ backgroundColor: ACCENT }}
+                className="rounded px-3 py-1.5 text-[13px] font-normal hover:brightness-125"
+                style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
               >
                 {t('applyEnabled')}
               </button>
               <button
                 onClick={unapplyAll}
-                className="rounded-md px-4 py-2 text-sm font-medium text-slate-300 hover:bg-black/20"
-                style={{ backgroundColor: APP_BACKGROUND }}
+                className="rounded border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
               >
                 {t('unapplyAll')}
               </button>
               <button
-                onClick={checkForModUpdates}
-                className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-slate-300 hover:bg-black/20"
-                style={{ backgroundColor: APP_BACKGROUND }}
+                onClick={pendingUpdateCount > 0 ? updateAllMods : checkForModUpdates}
+                className={
+                  pendingUpdateCount > 0
+                    ? 'flex items-center gap-2 rounded bg-[#35753a] px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125'
+                    : 'flex items-center gap-2 rounded border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10'
+                }
               >
                 <RefreshCw className="h-4 w-4" />
-                {t('checkModUpdates')}
+                {pendingUpdateCount > 0 ? t('updateCountMods', { count: pendingUpdateCount }) : t('checkModUpdates')}
               </button>
               <button
                 onClick={addCustomMod}
-                className="ml-auto flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-black/20"
+                className="ml-auto flex items-center gap-2 rounded border border-white/20 px-3 py-1.5 text-[13px] font-normal text-slate-200 hover:bg-black/20"
                 style={{ backgroundColor: SIDEBAR_BACKGROUND }}
               >
                 <Plus className="h-4 w-4" />
@@ -487,29 +605,35 @@ function App(): JSX.Element {
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto px-8 py-5">
+        <div className={'min-h-0 flex-1 ' + (page === 'browse' || page === 'installed' ? 'overflow-hidden' : 'overflow-y-auto px-8 py-5')}>
           {page === 'browse' && (
-            <>
-              {filteredBrowseMods.length === 0 ? (
-                <p className="text-sm text-slate-500">{t('noModsMatch')}</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredBrowseMods.map(renderModCard)}
-                </div>
-              )}
-            </>
+            <div className="flex h-full">
+              <div className="min-w-0 flex-1 overflow-y-auto">
+                {filteredBrowseMods.length === 0 ? (
+                  <p className="px-8 py-5 text-sm text-slate-500">{t('noModsMatch')}</p>
+                ) : (
+                  filteredBrowseMods.map((mod) => renderModListRow(mod, mod.fileName === selectedBrowseMod?.fileName))
+                )}
+              </div>
+              <div className="w-[420px] shrink-0 border-l border-white/20" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                {renderModDetailPanel(selectedBrowseMod)}
+              </div>
+            </div>
           )}
 
           {page === 'installed' && (
-            <>
-              {installedMods.length === 0 ? (
-                <p className="text-sm text-slate-500">{t('noModsInstalled')}</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {installedMods.map(renderModCard)}
-                </div>
-              )}
-            </>
+            <div className="flex h-full">
+              <div className="min-w-0 flex-1 overflow-y-auto">
+                {installedMods.length === 0 ? (
+                  <p className="px-8 py-5 text-sm text-slate-500">{t('noModsInstalled')}</p>
+                ) : (
+                  installedMods.map((mod) => renderModListRow(mod, mod.fileName === selectedInstalledMod?.fileName))
+                )}
+              </div>
+              <div className="w-[420px] shrink-0 border-l border-white/20" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                {renderModDetailPanel(selectedInstalledMod)}
+              </div>
+            </div>
           )}
 
           {page === 'settings' && (
@@ -520,16 +644,16 @@ function App(): JSX.Element {
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => changeUiLanguage('en')}
-                    className={'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ' + (uiLanguage === 'en' ? 'text-white' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
-                    style={uiLanguage === 'en' ? { backgroundColor: ACCENT } : undefined}
+                    className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'en' ? 'text-white' : 'bg-black/30 text-slate-400')}
+                    style={uiLanguage === 'en' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
                   >
                     <EnglishFlag />
                     English
                   </button>
                   <button
                     onClick={() => changeUiLanguage('th')}
-                    className={'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ' + (uiLanguage === 'th' ? 'text-white' : 'bg-black/30 text-slate-400 hover:text-slate-200')}
-                    style={uiLanguage === 'th' ? { backgroundColor: ACCENT } : undefined}
+                    className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'th' ? 'text-white' : 'bg-black/30 text-slate-400')}
+                    style={uiLanguage === 'th' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
                   >
                     <ThaiFlag />
                     ไทย
@@ -545,8 +669,8 @@ function App(): JSX.Element {
                   {updateReadyVersion ? (
                     <button
                       onClick={() => window.modManager.installUpdate()}
-                      className="shrink-0 rounded-md px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
-                      style={{ backgroundColor: '#d64c4c' }}
+                      className="shrink-0 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                      style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                     >
                       {t('restartNow')}
                     </button>
@@ -554,8 +678,8 @@ function App(): JSX.Element {
                     <button
                       onClick={checkForUpdates}
                       disabled={checkingForUpdates}
-                      className="shrink-0 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-70"
-                      style={{ backgroundColor: ACCENT }}
+                      className="shrink-0 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125 disabled:opacity-70"
+                      style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                     >
                       {checkingForUpdates ? t('checking') : t('checkForUpdates')}
                     </button>
@@ -583,7 +707,7 @@ function App(): JSX.Element {
                       </span>
                       <button
                         onClick={() => window.modManager.cancelUpdate()}
-                        className="rounded px-2.5 py-1 font-medium text-white hover:brightness-110"
+                        className="rounded px-2.5 py-1 font-normal text-white hover:brightness-125"
                         style={{ backgroundColor: '#5b6070' }}
                       >
                         {t('cancel')}
@@ -597,8 +721,8 @@ function App(): JSX.Element {
                 <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
                 <button
                   onClick={createDesktopShortcuts}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
+                  className="mt-3 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                  style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                 >
                   {t('createShortcuts')}
                 </button>
@@ -615,15 +739,14 @@ function App(): JSX.Element {
                 <div className="mt-3 flex items-center gap-2">
                   <button
                     onClick={clearTranslationCache}
-                    className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                    style={{ backgroundColor: ACCENT }}
+                    className="rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                    style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                   >
                     {t('clearCache')}
                   </button>
                   <button
                     onClick={() => window.modManager.openTranslationCacheFolder()}
-                    className="rounded-md border border-white/20 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-black/20"
-                    style={{ backgroundColor: APP_BACKGROUND }}
+                    className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
                   >
                     {t('openCacheFolder')}
                   </button>
@@ -634,8 +757,8 @@ function App(): JSX.Element {
                 <p className="text-slate-400">{t('logsDescription')}</p>
                 <button
                   onClick={() => window.modManager.openLogsFolder()}
-                  className="mt-3 rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
+                  className="mt-3 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                  style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                 >
                   {t('openLogsFolder')}
                 </button>
@@ -649,12 +772,21 @@ function App(): JSX.Element {
                 <h2 className="mb-2 font-semibold text-white">Credits</h2>
                 <p className="text-slate-400">
                   Mods and manager by Doogle, creator of{' '}
-                  <a href="https://ward-up.com" target="_blank" rel="noreferrer" className="hover:underline" style={{ color: ACCENT }}>
+                  <a href="https://ward-up.com" target="_blank" rel="noreferrer" className="text-white hover:underline">
                     WardUp
                   </a>
                   .
                 </p>
                 <p className="mt-1 text-slate-400">Built on the .honmod format for Heroes of Newerth Reborn.</p>
+                <a
+                  href="https://github.com/doogle-dev/honmodmanager"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 rounded border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-200 hover:bg-white/10"
+                >
+                  <Github className="h-4 w-4" />
+                  GitHub
+                </a>
               </div>
             </div>
           )}
@@ -663,15 +795,15 @@ function App(): JSX.Element {
       </main>
       </div>
 
-      <footer className="flex items-center justify-between gap-4 px-8 py-2" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+      <footer className="flex items-center justify-between gap-4 border-t border-white/10 px-8 py-2" style={{ backgroundColor: CHROME_BACKGROUND }}>
         <span className="block h-4 min-w-0 truncate text-xs text-white">{status}</span>
         {updateReadyVersion && (
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-slate-400">{t('updateReady', { version: updateReadyVersion })}</span>
             <button
               onClick={() => window.modManager.installUpdate()}
-              className="rounded px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110"
-              style={{ backgroundColor: ACCENT }}
+              className="rounded px-2.5 py-1 text-xs font-normal text-white hover:brightness-125"
+              style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
             >
               {t('restartNow')}
             </button>
@@ -679,52 +811,6 @@ function App(): JSX.Element {
         )}
       </footer>
 
-      {detailMod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setDetailMod(null)}>
-          <div
-            className="w-full max-w-lg rounded-lg border border-white/20 p-5"
-            style={{ backgroundColor: SIDEBAR_BACKGROUND }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start gap-4">
-              <ModIcon mod={detailMod} size="h-16 w-16" />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold text-white">{detailMod.name}</h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {detailMod.category} {t('byAuthor', { author: detailMod.author || t('unknown') })}
-                </p>
-              </div>
-            </div>
-            <p className="mt-4 whitespace-pre-line text-sm text-slate-300">{renderDescriptionText(detailMod.description)}</p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {!detailMod.installed && (
-                <button
-                  onClick={() => installMod(detailMod.fileName)}
-                  className="rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  {t('install')}
-                </button>
-              )}
-              {detailMod.installed && (
-                <button
-                  onClick={() => uninstallMod(detailMod.fileName)}
-                  className="rounded-md bg-black/20 px-4 py-2 text-sm font-medium text-slate-200 hover:text-rose-400"
-                >
-                  {t('uninstall')}
-                </button>
-              )}
-              <button
-                onClick={() => setDetailMod(null)}
-                className="ml-auto rounded-md px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-                style={{ backgroundColor: '#d64c4c' }}
-              >
-                {t('close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

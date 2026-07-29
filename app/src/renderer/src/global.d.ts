@@ -7,6 +7,7 @@ interface CatalogMod {
   category: string
   abilityKey: string
   icon: string | null
+  screenshot: string | null
   installed: boolean
   enabled: boolean
   updateAvailable: boolean

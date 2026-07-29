@@ -22,6 +22,7 @@ def read_manifest_and_icon(honmod_path):
         manifest_bytes = honmod_archive.read("mod.xml")
         entry_names = honmod_archive.namelist()
         icon_bytes = honmod_archive.read("icon.png") if "icon.png" in entry_names else None
+        screenshot_bytes = honmod_archive.read("screenshot.png") if "screenshot.png" in entry_names else None
     manifest_root = ElementTree.fromstring(manifest_bytes)
     metadata = {
         "name": manifest_root.get("name", os.path.basename(honmod_path)),
@@ -31,7 +32,7 @@ def read_manifest_and_icon(honmod_path):
         "category": manifest_root.get("category", "Other"),
         "abilitykey": manifest_root.get("abilitykey", ""),
     }
-    return metadata, icon_bytes
+    return metadata, icon_bytes, screenshot_bytes
 
 
 def build_identifier(display_name):
@@ -42,17 +43,19 @@ def build_identifier(display_name):
 def build_catalog():
     mods_output_directory = os.path.join(CATALOG_DIRECTORY, "mods")
     icons_output_directory = os.path.join(CATALOG_DIRECTORY, "icons")
+    screenshots_output_directory = os.path.join(CATALOG_DIRECTORY, "screenshots")
     if os.path.exists(CATALOG_DIRECTORY):
         shutil.rmtree(CATALOG_DIRECTORY)
     os.makedirs(mods_output_directory)
     os.makedirs(icons_output_directory)
+    os.makedirs(screenshots_output_directory)
 
     catalog_entries = []
     for file_name in sorted(os.listdir(SOURCE_MODS_DIRECTORY)):
         if not file_name.lower().endswith(".honmod"):
             continue
         source_path = os.path.join(SOURCE_MODS_DIRECTORY, file_name)
-        metadata, icon_bytes = read_manifest_and_icon(source_path)
+        metadata, icon_bytes, screenshot_bytes = read_manifest_and_icon(source_path)
         honmod_bytes = open(source_path, "rb").read()
         checksum = hashlib.sha256(honmod_bytes).hexdigest()
         identifier = build_identifier(metadata["name"])
@@ -63,6 +66,11 @@ def build_catalog():
             icon_file_name = identifier + ".png"
             open(os.path.join(icons_output_directory, icon_file_name), "wb").write(icon_bytes)
             icon_relative_path = "icons/" + icon_file_name
+        screenshot_relative_path = ""
+        if screenshot_bytes:
+            screenshot_file_name = identifier + ".png"
+            open(os.path.join(screenshots_output_directory, screenshot_file_name), "wb").write(screenshot_bytes)
+            screenshot_relative_path = "screenshots/" + screenshot_file_name
 
         catalog_entries.append({
             "id": identifier,
@@ -74,6 +82,7 @@ def build_catalog():
             "category": metadata["category"],
             "abilityKey": metadata["abilitykey"],
             "icon": icon_relative_path,
+            "screenshot": screenshot_relative_path,
             "download": "mods/" + file_name,
             "sha256": checksum,
         })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 const MESSAGE_LIFETIME_MILLISECONDS = 30000
-const ACCENT = '#7287d9'
+const ACCENT = '#3b6ea5'
 
 function ChatTranslationOverlay(): JSX.Element {
   const [messages, setMessages] = useState<ChatTranslationMessage[]>([])

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
-const ACCENT = '#7287d9'
-const PANEL_BACKGROUND = '#1b1c21'
+const ACCENT = '#3b6ea5'
+const PANEL_BACKGROUND = '#191a1b'
 
 function ChatComposeWindow(): JSX.Element {
   const [englishText, setEnglishText] = useState('')
@@ -155,8 +155,7 @@ function ChatComposeWindow(): JSX.Element {
           </button>
           <button
             onClick={() => window.modManager.closeChatCompose()}
-            className="ml-auto rounded-md px-4 py-1.5 text-sm font-semibold text-white hover:brightness-110"
-            style={{ backgroundColor: '#d64c4c' }}
+            className="ml-auto rounded-md bg-black/40 px-4 py-1.5 text-sm font-semibold text-[#c96a6a] hover:bg-[#c96a6a]/15 hover:text-[#e08a8a]"
           >
             Close
           </button>
