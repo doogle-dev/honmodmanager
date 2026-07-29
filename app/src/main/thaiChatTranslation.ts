@@ -965,7 +965,7 @@ export function stopThaiChatTranslation(): void {
   translationActive = false
   logLine('translation', 'session stopped')
   stopForegroundWatcher()
-  stopDebugOutputListener()
+  stopDebugOutputListener(handleDebugOutputLine)
   if (overlayWindow) {
     overlayWindow.close()
     overlayWindow = null

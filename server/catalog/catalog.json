@@ -1,6 +1,6 @@
 {
   "manager": {
-    "version": "0.2.5"
+    "version": "0.2.6"
   },
   "mods": [
     {
@@ -296,6 +296,20 @@
       "screenshot": "screenshots/vignette-remover.png",
       "download": "mods/VignetteRemover.honmod",
       "sha256": "30a81124c8c19971a6142614f3766431b77f63ace87ed01f40f065db3d271056"
+    },
+    {
+      "id": "wardup-lobby-stats",
+      "fileName": "WardUpLobbyStats.honmod",
+      "name": "WardUp Lobby Stats",
+      "version": "0.8",
+      "author": "Doogle",
+      "description": "**Needs the mod manager running while you play.**\n\nHover over a player name during the picking phase and their WardUp stats page appears in a floating window above the game. A WardUp entry is also added to the right click menu on players in chat and to the player menu in the game lobby. Click the WardUp entry again on the same player to close the window.\n\nStats come straight from ward-up.com.",
+      "category": "Interface",
+      "abilityKey": "",
+      "icon": "icons/wardup-lobby-stats.png",
+      "screenshot": "",
+      "download": "mods/WardUpLobbyStats.honmod",
+      "sha256": "ba5b2c781025545ca1dff072c5e92a525776f724acfa48024c4d56b93516abef"
     }
   ]
 }

@@ -44,8 +44,10 @@ Add-Type -TypeDefinition $typeDefinition -ReferencedAssemblies System.Core
 export type DebugOutputLineHandler = (processId: number, message: string) => void
 
 let listenerProcess: ChildProcess | null = null
+const lineHandlers = new Set<DebugOutputLineHandler>()
 
 export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
+  lineHandlers.add(onLine)
   if (listenerProcess) {
     return
   }
@@ -68,7 +70,9 @@ export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
       }
       const processId = parseInt(line.slice(0, separatorIndex), 10)
       const message = line.slice(separatorIndex + 1).replace(/\r$/, '')
-      onLine(processId, message)
+      for (const lineHandler of lineHandlers) {
+        lineHandler(processId, message)
+      }
     }
   })
   child.on('exit', (exitCode) => {
@@ -81,7 +85,15 @@ export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
   logLine('listener', 'debug output listener started, pid ' + String(child.pid))
 }
 
-export function stopDebugOutputListener(): void {
+export function stopDebugOutputListener(onLine?: DebugOutputLineHandler): void {
+  if (onLine) {
+    lineHandlers.delete(onLine)
+  } else {
+    lineHandlers.clear()
+  }
+  if (lineHandlers.size > 0) {
+    return
+  }
   if (!listenerProcess) {
     return
   }

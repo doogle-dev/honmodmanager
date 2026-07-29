@@ -22,6 +22,7 @@ import {
   stopThaiChatTranslation,
   isThaiChatTranslationActive
 } from './thaiChatTranslation'
+import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory } from './managerLogger'
 import type { Catalog } from './catalogClient'
@@ -253,20 +254,23 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
 
 function resumeTranslationSessionIfGameRunning(): void {
   const translationSettings = loadChatTranslationSettings()
-  if (!translationSettings.enabled) {
-    return
-  }
   isGameProcessRunning((running) => {
     if (!running) {
       return
     }
-    logLine('translation', 'game already running, resuming translation session')
-    startThaiChatTranslation(null, translationSettings.targetLanguage)
+    logLine('launch', 'game already running, resuming companion sessions')
+    startWardUpOverlay()
+    if (translationSettings.enabled) {
+      startThaiChatTranslation(null, translationSettings.targetLanguage)
+    }
     const pollTimer = setInterval(() => {
       isGameProcessRunning((stillRunning) => {
         if (!stillRunning) {
           clearInterval(pollTimer)
-          stopThaiChatTranslation()
+          stopWardUpOverlay()
+          if (translationSettings.enabled) {
+            stopThaiChatTranslation()
+          }
         }
       })
     }, 4000)
@@ -285,9 +289,11 @@ function performModdedLaunch(): ReturnType<typeof launchGame> {
   if (translationSettings.enabled) {
     startThaiChatTranslation(gameProcess, translationSettings.targetLanguage)
   }
+  startWardUpOverlay()
   whenGameFullyExits(gameProcess, () => {
     logLine('launch', 'game exited, syncing login back to real profile')
     copyLoginBackToRealProfile()
+    stopWardUpOverlay()
   })
   focusGameWindowWhenReady()
   return gameProcess
