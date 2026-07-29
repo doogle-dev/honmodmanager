@@ -88,8 +88,8 @@ const translations: Record<string, { en: string; th: string }> = {
   },
   openLogsFolder: { en: 'Open Logs Folder', th: 'เปิดโฟลเดอร์บันทึก' },
   languageDescription: {
-    en: 'Choose the language of the mod manager.',
-    th: 'เลือกภาษาของตัวจัดการม็อด'
+    en: 'Choose the language of the mod manager. This also sets the chat translation direction: in English, Thai game chat is translated to English and your Ctrl+T messages are sent in Thai. In Thai it works the other way around.',
+    th: 'เลือกภาษาของตัวจัดการม็อด ภาษานี้กำหนดทิศทางการแปลแชทด้วย: เมื่อใช้ภาษาอังกฤษ แชทภาษาไทยจะถูกแปลเป็นอังกฤษ และข้อความ Ctrl+T ของคุณจะถูกส่งเป็นภาษาไทย เมื่อใช้ภาษาไทยจะทำงานกลับกัน'
   },
   applying: { en: 'Applying...', th: 'กำลังใช้งานม็อด...' },
   applied: { en: 'Applied. Press Launch Modded to play.', th: 'ใช้งานม็อดแล้ว กดเปิดเกมเพื่อเล่น' },
