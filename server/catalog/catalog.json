@@ -1,49 +1,21 @@
 {
   "manager": {
-    "version": "0.2.6"
+    "version": "0.2.7"
   },
   "mods": [
-    {
-      "id": "always-buy-bar",
-      "fileName": "AlwaysBuyBar.honmod",
-      "name": "Always Buy Bar",
-      "version": "1.8",
-      "author": "Doogle",
-      "description": "Adds an always visible grid of item shortcuts next to the minimap. Click an item to buy it through the shop and the courier automatically delivers it. Click the gear to open a searchable list of every shop item and choose which ones appear, saved between games.",
-      "category": "Interface",
-      "abilityKey": "",
-      "icon": "icons/always-buy-bar.png",
-      "screenshot": "screenshots/always-buy-bar.png",
-      "download": "mods/AlwaysBuyBar.honmod",
-      "sha256": "66735ee878cf8a28cc2b30999f2f5346d1bac18d723ee02ce285798a9f0655ab"
-    },
-    {
-      "id": "bigger-minimap",
-      "fileName": "BiggerMinimap.honmod",
-      "name": "Bigger Minimap",
-      "version": "1.0",
-      "author": "Doogle",
-      "description": "Enlarges the ingame minimap so the map is easier to read at a glance. The rest of the HUD stays in place.",
-      "category": "Interface",
-      "abilityKey": "",
-      "icon": "icons/bigger-minimap.png",
-      "screenshot": "screenshots/bigger-minimap.png",
-      "download": "mods/BiggerMinimap.honmod",
-      "sha256": "d0ee7b04bcbd150b0103577298182d5190dca12f1830e12807f6d0e3825ae63a"
-    },
     {
       "id": "boss-timers-on-screen",
       "fileName": "BossTimersOnScreen.honmod",
       "name": "Boss Timers On Screen",
-      "version": "1.2",
+      "version": "1.3",
       "author": "Doogle",
-      "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.\n\nThe rows show dashes until the first boss data arrives in a match, then the timers keep counting on their own and resync whenever the game sends fresh data.",
+      "description": "Shows the Kongor and Phoenix respawn timers on the right side of the screen at all times so you do not need to hold the scoreboard key to see them.\n\nThe mod quietly requests scoreboard data in the background, so the timers stay current on their own without ever opening the scoreboard. The rows show dashes only for the first few seconds of a match before the first data arrives.",
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/boss-timers-on-screen.png",
       "screenshot": "screenshots/boss-timers-on-screen.png",
       "download": "mods/BossTimersOnScreen.honmod",
-      "sha256": "15c93d947e0c75224c8a781a32d6dab1701f7b65183a4fd90155ca7b7d9248b9"
+      "sha256": "cac3d9a6f123e3e3d470fef7346ccec50a9470be8a6ef1193ec09fe489d858b7"
     },
     {
       "id": "brighter-ward-spots",
@@ -88,20 +60,6 @@
       "sha256": "811b3eee79608cfc40bbd4c39b44ae711237e2b25aa64ebd81ec183df3f1e8ef"
     },
     {
-      "id": "compact-menu-chat",
-      "fileName": "CompactMenuChat.honmod",
-      "name": "Compact Menu Chat",
-      "version": "1.0",
-      "author": "Doogle",
-      "description": "Shrinks the main menu chat and user list into a compact box in the bottom right and adds a button above it that hides or shows the chat.",
-      "category": "Interface",
-      "abilityKey": "",
-      "icon": "icons/compact-menu-chat.png",
-      "screenshot": "screenshots/compact-menu-chat.png",
-      "download": "mods/CompactMenuChat.honmod",
-      "sha256": "57d3f1f4de4848fd54799f5554587e96bf8d671fadbb04341adf0d6fbf244b3b"
-    },
-    {
       "id": "astrolabe-range-ring",
       "fileName": "RangeRingAstrolabe.honmod",
       "name": "Astrolabe Range Ring",
@@ -113,7 +71,7 @@
       "icon": "icons/astrolabe-range-ring.png",
       "screenshot": "screenshots/astrolabe-range-ring.png",
       "download": "mods/RangeRingAstrolabe.honmod",
-      "sha256": "b91dccb831878bfa2a30c11c6070ad2c5c04026705626d6c0f2ee859590552dd"
+      "sha256": "b0cab57f27be84d93526ec3b2dd3e3dd27200c508130c7256848db89053fb3a3"
     },
     {
       "id": "moon-queen-moon-finale-range-ring",
@@ -127,13 +85,13 @@
       "icon": "icons/moon-queen-moon-finale-range-ring.png",
       "screenshot": "screenshots/moon-queen-moon-finale-range-ring.png",
       "download": "mods/RangeRingMoonQueenMoonFinale.honmod",
-      "sha256": "01b44e5c94d42fa4f664e08ab56007500d608a514271779ab5981521ea700066"
+      "sha256": "aeb0c6cba8dde3f7971d5e2cc416ff3b6131578c58f9423f856d161ad8f598ec"
     },
     {
       "id": "pharaoh-wall-of-mummies-range-ring",
       "fileName": "RangeRingPharaohWallOfMummies.honmod",
       "name": "Pharaoh Wall of Mummies Range Ring",
-      "version": "1.0",
+      "version": "1.1",
       "author": "Doogle",
       "description": "Shows the Wall of Mummies ring around Pharaoh at all times using the games own cast indicator ring.",
       "category": "Range Rings",
@@ -141,7 +99,7 @@
       "icon": "icons/pharaoh-wall-of-mummies-range-ring.png",
       "screenshot": "screenshots/pharaoh-wall-of-mummies-range-ring.png",
       "download": "mods/RangeRingPharaohWallOfMummies.honmod",
-      "sha256": "7f6f8593b5cece6f07a4872ba0a8e1ed63e2732e03cf8141b45687a37e3cf4c3"
+      "sha256": "9ba664f6e15a2b0ca9460cd45ccd3f9a2befa7eff4cdf48d4d5ccb57b2289b2e"
     },
     {
       "id": "riftwalker-wormhole-range-ring",
@@ -155,7 +113,7 @@
       "icon": "icons/riftwalker-wormhole-range-ring.png",
       "screenshot": "screenshots/riftwalker-wormhole-range-ring.png",
       "download": "mods/RangeRingRiftwalkerWormhole.honmod",
-      "sha256": "0e5bcb49cfe73ed4b351460f27d2353bf22f47f962fc20356dc0f3e34f5e389d"
+      "sha256": "10ed4a74e24c1303a7fc564fae825b4e95218996504760ae65f87c2247c73efe"
     },
     {
       "id": "soul-reaper-judgement-range-ring",
@@ -169,7 +127,7 @@
       "icon": "icons/soul-reaper-judgement-range-ring.png",
       "screenshot": "screenshots/soul-reaper-judgement-range-ring.png",
       "download": "mods/RangeRingSoulReaperJudgement.honmod",
-      "sha256": "4d28efc598465dd18f92f2c543168726e4ef9df3f0cbb472f1e29698fdff542e"
+      "sha256": "e9ecb1af62105d575de4f64ab29f57da17ff527bab5242749fe3685ff23aaab0"
     },
     {
       "id": "soulstealer-demon-hand-range-rings",
@@ -183,7 +141,7 @@
       "icon": "icons/soulstealer-demon-hand-range-rings.png",
       "screenshot": "screenshots/soulstealer-demon-hand-range-rings.png",
       "download": "mods/RangeRingSoulstealerDemonHand.honmod",
-      "sha256": "6d949ead9743012961603087a8b2cd3d75d6f8b36f5209d70bd161b4aea0455e"
+      "sha256": "bae96c07f8d1bc7e36807a9c604182cc259e15941fc5ed731d97b8003c787175"
     },
     {
       "id": "tower-range-rings",
@@ -197,7 +155,7 @@
       "icon": "icons/tower-range-rings.png",
       "screenshot": "screenshots/tower-range-rings.png",
       "download": "mods/RangeRingTowers.honmod",
-      "sha256": "671879c928a3095b9cfc05e1bf1f1c6d70987cdd3b154f8ff78cb871135a918a"
+      "sha256": "b38a9631451b620cf2c36543bb388d011f53c3546b3a629e824f3ad210d3c367"
     },
     {
       "id": "custom-cursor-ember",
@@ -245,7 +203,7 @@
       "id": "rhapsody-melody-range-ring",
       "fileName": "RebornRangeRingRhapsodyMelody.honmod",
       "name": "Rhapsody Melody Range Ring",
-      "version": "1.0",
+      "version": "1.1",
       "author": "Doogle",
       "description": "Shows the Protective Melody radius around Rhapsody at all times using the games own cast indicator ring.",
       "category": "Range Rings",
@@ -253,7 +211,7 @@
       "icon": "icons/rhapsody-melody-range-ring.png",
       "screenshot": "screenshots/rhapsody-melody-range-ring.png",
       "download": "mods/RebornRangeRingRhapsodyMelody.honmod",
-      "sha256": "bf5810778fe922c2c48e91a0585960353397c0f1218066e494a69a5fe636a245"
+      "sha256": "27934a37cc330845ed0c23f987d68b555745e782cc6855d5de0ac6e4b5aaafd5"
     },
     {
       "id": "remove-death-screen-effects",
@@ -273,7 +231,7 @@
       "id": "tree-stumps",
       "fileName": "TreeStumps.honmod",
       "name": "Tree Stumps",
-      "version": "1.0",
+      "version": "1.1",
       "author": "Doogle",
       "description": "Replaces the map trees with small stumps for a clearer view of the battlefield.",
       "category": "Visibility",
@@ -281,35 +239,21 @@
       "icon": "icons/tree-stumps.png",
       "screenshot": "",
       "download": "mods/TreeStumps.honmod",
-      "sha256": "70a480fdca7a8f9266223bc09d8c4c4e5c2597dba4a2893634f603f87fa89c04"
-    },
-    {
-      "id": "vignette-remover",
-      "fileName": "VignetteRemover.honmod",
-      "name": "Vignette Remover",
-      "version": "1.0",
-      "author": "Doogle",
-      "description": "Removes the dark vignette shading around the edges of the screen so the corners of your view stay bright and clear.",
-      "category": "Visibility",
-      "abilityKey": "",
-      "icon": "icons/vignette-remover.png",
-      "screenshot": "screenshots/vignette-remover.png",
-      "download": "mods/VignetteRemover.honmod",
-      "sha256": "30a81124c8c19971a6142614f3766431b77f63ace87ed01f40f065db3d271056"
+      "sha256": "eb8f24ce854324c0b136f6e1a083ca0758e15790a09a94f7e52089d89c2cd1b2"
     },
     {
       "id": "wardup-lobby-stats",
       "fileName": "WardUpLobbyStats.honmod",
       "name": "WardUp Lobby Stats",
-      "version": "0.8",
+      "version": "0.9",
       "author": "Doogle",
-      "description": "**Needs the mod manager running while you play.**\n\nHover over a player name during the picking phase and their WardUp stats page appears in a floating window above the game. A WardUp entry is also added to the right click menu on players in chat and to the player menu in the game lobby. Click the WardUp entry again on the same player to close the window.\n\nStats come straight from ward-up.com.",
+      "description": "**Needs the mod manager running while you play.**\n\nHover over a player name during the picking phase to see a small WardUp stats card above the game with their MMR, win rate, KDA and top heroes. Everyone in the lobby is looked up once when the draft starts, so the cards appear instantly. A WardUp entry is also added to the right click menu on players in chat and to the player menu in the game lobby, which opens their full WardUp page in a floating window. Click the WardUp entry again on the same player to close it.\n\nStats come straight from ward-up.com.",
       "category": "Interface",
       "abilityKey": "",
       "icon": "icons/wardup-lobby-stats.png",
       "screenshot": "",
       "download": "mods/WardUpLobbyStats.honmod",
-      "sha256": "ba5b2c781025545ca1dff072c5e92a525776f724acfa48024c4d56b93516abef"
+      "sha256": "c52f30b492bd662926fd973bb6315c770f419858ef91478efabb839d2375ac06"
     }
   ]
 }
