@@ -499,6 +499,10 @@ function registerInterProcessHandlers(): void {
       throw new Error('The mod was not found in the catalog: ' + fileName)
     }
     await installCatalogMod(catalogBaseUrl(), entry, honmodLibraryDirectory())
+    if (loadEnabledFileNames().includes(fileName)) {
+      logLine('apply', 'auto applying after update of enabled mod ' + fileName)
+      performApplyEnabled()
+    }
     return true
   })
 
