@@ -140,10 +140,12 @@ function copyLoginBackToRealProfile(): void {
   if (existsSync(modLoginPath)) {
     copyFileSync(modLoginPath, realLoginPath)
   }
-  transplantLoginCvars(
-    join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, 'startup.cfg'),
-    join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, 'startup.cfg')
-  )
+  for (const settingsFileName of SETTINGS_FILE_NAMES) {
+    const modSettingsPath = join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, settingsFileName)
+    if (existsSync(modSettingsPath)) {
+      copyFileSync(modSettingsPath, join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, settingsFileName))
+    }
+  }
 }
 
 function focusGameWindowWhenReady(): void {
