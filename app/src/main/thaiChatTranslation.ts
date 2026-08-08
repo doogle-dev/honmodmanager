@@ -324,6 +324,8 @@ const OVERLAY_WINDOW_ENABLED = false
 
 let overlayWindow: BrowserWindow | null = null
 let translationActive = false
+let sawAnyRelayLine = false
+let relayWatchdogTimer: NodeJS.Timeout | null = null
 let messageCounter = 0
 let lastRelayCounter = 0
 let inboxFileIndex = 0
@@ -509,12 +511,14 @@ function rateLimitedTranslate(messageText: string): Promise<string> {
   const callPromise = translationCallChain.then(async () => {
     try {
       return await translateText(messageText, translationTargetLanguage)
-    } catch {
+    } catch (firstError) {
+      logLine('translation', 'translate attempt 1 failed: ' + String(firstError))
       await waitMilliseconds(1000)
     }
     try {
       return await translateText(messageText, translationTargetLanguage)
-    } catch {
+    } catch (secondError) {
+      logLine('translation', 'translate attempt 2 failed: ' + String(secondError))
       await waitMilliseconds(3000)
     }
     return await translateText(messageText, translationTargetLanguage)
@@ -839,13 +843,16 @@ function handleChannelRelayLine(line: string): boolean {
   const messageRaw = decodeRelayField(match[5])
   const cleanMessage = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
   if (!needsTranslation(cleanMessage)) {
+    logLine('translation', 'channel chat skipped, no translation needed: ' + cleanMessage.slice(0, 60))
     return true
   }
   const now = Date.now()
   const previousTime = recentChannelMessageTimes.get(prefixRaw + '|' + messageRaw)
   if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+    logLine('translation', 'channel chat duplicate suppressed: ' + cleanMessage.slice(0, 60))
     return true
   }
+  logLine('translation', 'channel chat translating: ' + cleanMessage.slice(0, 60))
   recentChannelMessageTimes.set(prefixRaw + '|' + messageRaw, now)
   for (const [key, seenTime] of recentChannelMessageTimes) {
     if (now - seenTime > DUPLICATE_WINDOW_MILLISECONDS) {
@@ -866,6 +873,10 @@ function handleChannelRelayLine(line: string): boolean {
 
 function handleDebugOutputLine(_processId: number, line: string): void {
   if (line.includes('HONCHA')) {
+    if (!sawAnyRelayLine) {
+      sawAnyRelayLine = true
+      logLine('translation', 'first relay line received, the game side is alive')
+    }
     logLine('relay', line)
   }
   if (handleChannelRelayLine(line)) {
@@ -889,6 +900,7 @@ function handleDebugOutputLine(_processId: number, line: string): void {
   const relayText = decodeRelayField(match[4])
   const originalText = extractChatBody(relayText)
   if (!needsTranslation(originalText)) {
+    logLine('translation', 'game chat skipped, no translation needed: ' + originalText.slice(0, 60))
     return
   }
   const now = Date.now()
@@ -898,11 +910,13 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     now - pendingDuplicateTime < DUPLICATE_WINDOW_MILLISECONDS
   ) {
     pendingDuplicateText = ''
+    logLine('translation', 'game chat duplicate suppressed: ' + originalText.slice(0, 60))
     return
   }
   pendingDuplicateText = originalText
   pendingDuplicateCounter = relayCounter
   pendingDuplicateTime = now
+  logLine('translation', 'game chat translating: ' + originalText.slice(0, 60))
   messageCounter += 1
   const messageId = messageCounter
   translateWithCache(originalText)
@@ -931,7 +945,19 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   }
   translationActive = true
   translationTargetLanguage = targetLanguage
-  logLine('translation', 'session started, target language ' + targetLanguage)
+  logLine(
+    'translation',
+    'session started, target language ' + targetLanguage + ', ' + (gameProcess ? 'attached to launched game' : 'standalone, game was already running')
+  )
+  sawAnyRelayLine = false
+  relayWatchdogTimer = setTimeout(() => {
+    if (translationActive && !sawAnyRelayLine) {
+      logLine(
+        'translation',
+        'no relay lines from the game after 90 seconds. The game side is not talking. Check that the game was launched modded through the manager and that chat translation was enabled before the launch'
+      )
+    }
+  }, 90000)
   lastRelayCounter = 0
   inboxFileIndex = 0
   lastChannelRelayCounter = 0
@@ -964,6 +990,10 @@ export function stopThaiChatTranslation(): void {
   }
   translationActive = false
   logLine('translation', 'session stopped')
+  if (relayWatchdogTimer) {
+    clearTimeout(relayWatchdogTimer)
+    relayWatchdogTimer = null
+  }
   stopForegroundWatcher()
   stopDebugOutputListener(handleDebugOutputLine)
   if (overlayWindow) {

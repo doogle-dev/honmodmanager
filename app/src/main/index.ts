@@ -239,6 +239,7 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
   const overlayPath = modsOverlayArchivePath(juvioRoot)
   const enabledPaths = listHonmodPaths().filter((honmodPath) => enabledFileNames.includes(basename(honmodPath)))
   const extraEdits = loadChatTranslationEnabled() ? chatRelayLuaEdits : []
+  logLine('apply', 'chat translation relay edits included: ' + (extraEdits.length > 0 ? 'yes' : 'no'))
   if (enabledPaths.length === 0 && extraEdits.length === 0) {
     if (existsSync(overlayPath)) {
       rmSync(overlayPath)
@@ -280,7 +281,7 @@ function resumeTranslationSessionIfGameRunning(): void {
 }
 
 function performModdedLaunch(): ReturnType<typeof launchGame> {
-  logLine('launch', 'modded launch requested')
+  logLine('launch', 'modded launch requested, chat translation enabled: ' + String(loadChatTranslationSettings().enabled))
   synchronizeSettingsProfiles()
   const translationSettings = loadChatTranslationSettings()
   const gameProcess = launchGame(
