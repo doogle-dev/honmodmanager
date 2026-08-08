@@ -77,6 +77,14 @@ const CHAT_DEFINITIONS_BODY = [
   '\treturn table.concat(output)',
   'end',
   '',
+  'ChatTranslatorAppliedSequences = ChatTranslatorAppliedSequences or {}',
+  '',
+  'function ChatTranslatorApply(sequenceNumber, applyCallback)',
+  '\tif ChatTranslatorAppliedSequences[sequenceNumber] then return end',
+  '\tChatTranslatorAppliedSequences[sequenceNumber] = true',
+  '\tpcall(applyCallback)',
+  'end',
+  '',
   'function ChatTranslatorDeliver(originalEncoded, translatedEncoded)',
   '\tpcall(function()',
   '\t\tlocal originalText = ChatTranslatorDecode(originalEncoded)',
@@ -127,19 +135,12 @@ const CHAT_DEFINITIONS_BODY = [
   "\t\tpcall(function() Echo('HONCHATPOLLALIVE') end)",
   '\tend',
   '\tpcall(function()',
-  '\t\tlocal expected = ChatTranslatorNextInbox or 1',
-  "\t\tlocal inboxFileName = 'ChatTranslatorInbox' .. tostring(expected) .. '.lua'",
+  "\t\tlocal inboxFileName = 'ChatTranslatorInbox.lua'",
   '\t\tlocal canCheckFiles = Testing and Testing.FileExists',
   "\t\tif not canCheckFiles or Testing.FileExists('#/' .. inboxFileName) then",
   "\t\t\tpcall(function() runfile('#/' .. inboxFileName) end)",
-  '\t\tend',
-  '\t\tif ChatTranslatorInboxLoaded ~= expected then',
-  "\t\t\tif not canCheckFiles or Testing.FileExists('~/' .. inboxFileName) then",
-  "\t\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
-  '\t\t\tend',
-  '\t\tend',
-  '\t\tif ChatTranslatorInboxLoaded == expected then',
-  '\t\t\tChatTranslatorNextInbox = expected + 1',
+  "\t\telseif canCheckFiles and Testing.FileExists('~/' .. inboxFileName) then",
+  "\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
   '\t\tend',
   '\tend)',
   'end',
@@ -220,6 +221,14 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\tend)',
   'end',
   '',
+  'ChannelTranslatorAppliedSequences = ChannelTranslatorAppliedSequences or {}',
+  '',
+  'function ChannelTranslatorApply(sequenceNumber, applyCallback)',
+  '\tif ChannelTranslatorAppliedSequences[sequenceNumber] then return end',
+  '\tChannelTranslatorAppliedSequences[sequenceNumber] = true',
+  '\tpcall(applyCallback)',
+  'end',
+  '',
   'function ChannelTranslatorPoll()',
   '\tChannelTranslatorFrameCount = (ChannelTranslatorFrameCount or 0) + 1',
   '\tif ChannelTranslatorFrameCount % 20 ~= 0 then return end',
@@ -228,19 +237,12 @@ const CHANNEL_DEFINITIONS_BODY = [
   "\t\tpcall(function() Echo('HONCHANPOLLALIVE') end)",
   '\tend',
   '\tpcall(function()',
-  '\t\tlocal expected = ChannelTranslatorNextInbox or 1',
-  "\t\tlocal inboxFileName = 'ChannelTranslatorInbox' .. tostring(expected) .. '.lua'",
+  "\t\tlocal inboxFileName = 'ChannelTranslatorInbox.lua'",
   '\t\tlocal canCheckFiles = Testing and Testing.FileExists',
   "\t\tif not canCheckFiles or Testing.FileExists('#/' .. inboxFileName) then",
   "\t\t\tpcall(function() runfile('#/' .. inboxFileName) end)",
-  '\t\tend',
-  '\t\tif ChannelTranslatorInboxLoaded ~= expected then',
-  "\t\t\tif not canCheckFiles or Testing.FileExists('~/' .. inboxFileName) then",
-  "\t\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
-  '\t\t\tend',
-  '\t\tend',
-  '\t\tif ChannelTranslatorInboxLoaded == expected then',
-  '\t\t\tChannelTranslatorNextInbox = expected + 1',
+  "\t\telseif canCheckFiles and Testing.FileExists('~/' .. inboxFileName) then",
+  "\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
   '\t\tend',
   '\tend)',
   'end',
@@ -328,9 +330,7 @@ let sawAnyRelayLine = false
 let relayWatchdogTimer: NodeJS.Timeout | null = null
 let messageCounter = 0
 let lastRelayCounter = 0
-let inboxFileIndex = 0
 let lastChannelRelayCounter = 0
-let channelInboxFileIndex = 0
 let pendingDuplicateText = ''
 let pendingDuplicateCounter = 0
 let pendingDuplicateTime = 0
@@ -365,6 +365,8 @@ function clearInboxFiles(): void {
   if (!profileDirectory) {
     return
   }
+  chatInboxEntries = []
+  rmSync(join(profileDirectory, 'ChatTranslatorInbox.lua'), { force: true })
   for (const entryName of readdirSync(profileDirectory)) {
     if (/^ChatTranslatorInbox\d+\.lua$/.test(entryName)) {
       rmSync(join(profileDirectory, entryName), { force: true })
@@ -372,33 +374,64 @@ function clearInboxFiles(): void {
   }
 }
 
-const INBOX_FILE_LIFETIME_MILLISECONDS = 20000
+const INBOX_ENTRY_LIFETIME_MILLISECONDS = 120000
+const INBOX_ENTRY_LIMIT = 20
 
-function writeInboxFile(inboxLines: string[]): void {
+type InboxEntry = { sequence: number; luaCall: string; time: number }
+
+let chatInboxSequence = 0
+let channelInboxSequence = 0
+let chatInboxEntries: InboxEntry[] = []
+let channelInboxEntries: InboxEntry[] = []
+
+function pruneInboxEntries(entries: InboxEntry[]): InboxEntry[] {
+  const now = Date.now()
+  return entries.filter((entry) => now - entry.time < INBOX_ENTRY_LIFETIME_MILLISECONDS).slice(-INBOX_ENTRY_LIMIT)
+}
+
+function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: InboxEntry[]): void {
   const profileDirectory = modProfileDirectory()
   if (!profileDirectory) {
     return
   }
-  inboxFileIndex += 1
-  const inboxPath = join(profileDirectory, 'ChatTranslatorInbox' + inboxFileIndex + '.lua')
-  writeFileSync(inboxPath, ['ChatTranslatorInboxLoaded = ' + inboxFileIndex, ...inboxLines, ''].join('\n'))
-  setTimeout(() => {
+  const inboxPath = join(profileDirectory, fileName)
+  if (entries.length === 0) {
     rmSync(inboxPath, { force: true })
-  }, INBOX_FILE_LIFETIME_MILLISECONDS)
+    return
+  }
+  const fileLines = entries.map(
+    (entry) =>
+      'if ' + applyFunctionName + ' then ' + applyFunctionName + '(' + entry.sequence + ', function() ' + entry.luaCall + ' end) end'
+  )
+  writeFileSync(inboxPath, fileLines.join('\n') + '\n')
+}
+
+function queueChatInboxLine(luaCall: string): void {
+  chatInboxSequence += 1
+  chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
+  chatInboxEntries = pruneInboxEntries(chatInboxEntries)
+  rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
+  logLine('translation', 'chat inbox written, sequence ' + chatInboxSequence + ', pending entries ' + chatInboxEntries.length)
+}
+
+function queueChannelInboxLine(luaCall: string): void {
+  channelInboxSequence += 1
+  channelInboxEntries.push({ sequence: channelInboxSequence, luaCall, time: Date.now() })
+  channelInboxEntries = pruneInboxEntries(channelInboxEntries)
+  rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
+  logLine('translation', 'channel inbox written, sequence ' + channelInboxSequence + ', pending entries ' + channelInboxEntries.length)
 }
 
 function writeTranslationInbox(originalRelayText: string, translatedText: string): void {
   const markedTranslation = '^458[T]^* ' + translatedText
   const originalEncoded = Buffer.from(originalRelayText, 'utf8').toString('base64')
   const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
-  writeInboxFile([
-    "if ChatTranslatorDeliver then ChatTranslatorDeliver('" + originalEncoded + "', '" + translatedEncoded + "') end"
-  ])
+  queueChatInboxLine("if ChatTranslatorDeliver then ChatTranslatorDeliver('" + originalEncoded + "', '" + translatedEncoded + "') end")
 }
 
 function writeChatSendInbox(thaiText: string, channelName: 'team' | 'all'): void {
   const textEncoded = Buffer.from(thaiText, 'utf8').toString('base64')
-  writeInboxFile(["if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "') end"])
+  queueChatInboxLine("if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "') end")
 }
 
 function clearChannelInboxFiles(): void {
@@ -406,6 +439,8 @@ function clearChannelInboxFiles(): void {
   if (!profileDirectory) {
     return
   }
+  channelInboxEntries = []
+  rmSync(join(profileDirectory, 'ChannelTranslatorInbox.lua'), { force: true })
   for (const entryName of readdirSync(profileDirectory)) {
     if (/^ChannelTranslatorInbox\d+\.lua$/.test(entryName)) {
       rmSync(join(profileDirectory, entryName), { force: true })
@@ -414,31 +449,19 @@ function clearChannelInboxFiles(): void {
 }
 
 function writeChannelTranslationInbox(prefixRaw: string, messageRaw: string, translatedText: string): void {
-  const profileDirectory = modProfileDirectory()
-  if (!profileDirectory) {
-    return
-  }
-  channelInboxFileIndex += 1
   const markedTranslation = '^458[T]^* ' + translatedText
   const prefixEncoded = Buffer.from(prefixRaw, 'utf8').toString('base64')
   const messageEncoded = Buffer.from(messageRaw, 'utf8').toString('base64')
   const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
-  const inboxPath = join(profileDirectory, 'ChannelTranslatorInbox' + channelInboxFileIndex + '.lua')
-  const inboxLines = [
-    'ChannelTranslatorInboxLoaded = ' + channelInboxFileIndex,
+  queueChannelInboxLine(
     "if ChannelTranslatorDeliver then ChannelTranslatorDeliver('" +
       prefixEncoded +
       "', '" +
       messageEncoded +
       "', '" +
       translatedEncoded +
-      "') end",
-    ''
-  ]
-  writeFileSync(inboxPath, inboxLines.join('\n'))
-  setTimeout(() => {
-    rmSync(inboxPath, { force: true })
-  }, INBOX_FILE_LIFETIME_MILLISECONDS)
+      "') end"
+  )
 }
 
 function translationCachePath(): string {
@@ -835,7 +858,7 @@ function handleChannelRelayLine(line: string): boolean {
     return true
   }
   if (relayCounter < lastChannelRelayCounter) {
-    channelInboxFileIndex = 0
+    logLine('translation', 'game channel relay counter reset, clearing channel inbox')
     clearChannelInboxFiles()
   }
   lastChannelRelayCounter = relayCounter
@@ -893,7 +916,7 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     return
   }
   if (relayCounter < lastRelayCounter) {
-    inboxFileIndex = 0
+    logLine('translation', 'game relay counter reset, clearing chat inbox')
     clearInboxFiles()
   }
   lastRelayCounter = relayCounter
@@ -959,9 +982,9 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
     }
   }, 90000)
   lastRelayCounter = 0
-  inboxFileIndex = 0
   lastChannelRelayCounter = 0
-  channelInboxFileIndex = 0
+  chatInboxSequence = Date.now() % 1000000000
+  channelInboxSequence = chatInboxSequence
   pendingDuplicateText = ''
   pendingDuplicateCounter = 0
   pendingDuplicateTime = 0
