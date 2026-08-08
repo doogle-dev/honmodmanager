@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 
 export interface CatalogModEntry {
   id: string
@@ -56,6 +56,9 @@ export async function installCatalogMod(
   entry: CatalogModEntry,
   libraryDirectory: string
 ): Promise<void> {
+  if (!entry.sha256) {
+    throw new Error('The catalog entry has no checksum: ' + entry.fileName)
+  }
   const honmodBytes = await downloadAndVerify(resolveCatalogUrl(baseUrl, entry.download), entry.sha256)
-  writeFileSync(join(libraryDirectory, entry.fileName), honmodBytes)
+  writeFileSync(join(libraryDirectory, basename(entry.fileName)), honmodBytes)
 }

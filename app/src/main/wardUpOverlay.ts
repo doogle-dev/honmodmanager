@@ -302,6 +302,12 @@ function createOverlayWindow(): BrowserWindow {
   })
   window.setAlwaysOnTop(true, 'screen-saver')
   window.setMenuBarVisibility(false)
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-navigate', (event, navigationUrl) => {
+    if (!navigationUrl.startsWith('https://ward-up.com/')) {
+      event.preventDefault()
+    }
+  })
   window.on('resize', () => scheduleSaveOverlayBounds(window))
   window.on('move', () => scheduleSaveOverlayBounds(window))
   window.webContents.on('did-finish-load', () => {
