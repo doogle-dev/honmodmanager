@@ -40,6 +40,12 @@ def build_identifier(display_name):
     return "".join(identifier_characters).strip("-")
 
 
+HIDDEN_MOD_FILE_NAMES = [
+    "BossTimersOnScreen.honmod",
+    "WardUpLobbyStats.honmod",
+]
+
+
 def build_catalog():
     mods_output_directory = os.path.join(CATALOG_DIRECTORY, "mods")
     icons_output_directory = os.path.join(CATALOG_DIRECTORY, "icons")
@@ -53,6 +59,8 @@ def build_catalog():
     catalog_entries = []
     for file_name in sorted(os.listdir(SOURCE_MODS_DIRECTORY)):
         if not file_name.lower().endswith(".honmod"):
+            continue
+        if file_name in HIDDEN_MOD_FILE_NAMES:
             continue
         source_path = os.path.join(SOURCE_MODS_DIRECTORY, file_name)
         metadata, icon_bytes, screenshot_bytes = read_manifest_and_icon(source_path)
