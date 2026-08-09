@@ -414,8 +414,38 @@ function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: 
   writeFileSync(inboxPath, fileLines.join('\n') + '\n')
 }
 
+const inboxWriteTimes = new Map<number, number>()
+const DELIVERY_RETRY_LIMIT = 2
+const DELIVERY_RETRY_DELAY_MILLISECONDS = 2500
+let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number } | null = null
+
+function retryLastDelivery(): void {
+  const pending = lastDelivery
+  if (!pending || pending.attempts >= DELIVERY_RETRY_LIMIT) {
+    if (pending) {
+      logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
+      lastDelivery = null
+    }
+    return
+  }
+  pending.attempts += 1
+  logLine('translation', 'the chat line to replace was not found, retry ' + pending.attempts)
+  setTimeout(() => {
+    if (!translationActive) {
+      return
+    }
+    if (pending.kind === 'chat') {
+      queueChatInboxLine(pending.luaCall)
+    } else {
+      queueChannelInboxLine(pending.luaCall)
+    }
+  }, DELIVERY_RETRY_DELAY_MILLISECONDS)
+}
+
 function queueChatInboxLine(luaCall: string): void {
+  lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'chat', luaCall, attempts: 0 }
   chatInboxSequence += 1
+  inboxWriteTimes.set(chatInboxSequence, Date.now())
   chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
   chatInboxEntries = pruneInboxEntries(chatInboxEntries)
   rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
@@ -423,7 +453,9 @@ function queueChatInboxLine(luaCall: string): void {
 }
 
 function queueChannelInboxLine(luaCall: string): void {
+  lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'channel', luaCall, attempts: 0 }
   channelInboxSequence += 1
+  inboxWriteTimes.set(channelInboxSequence, Date.now())
   channelInboxEntries.push({ sequence: channelInboxSequence, luaCall, time: Date.now() })
   channelInboxEntries = pruneInboxEntries(channelInboxEntries)
   rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
@@ -905,6 +937,19 @@ function handleChannelRelayLine(line: string): boolean {
 }
 
 function handleDebugOutputLine(_processId: number, line: string): void {
+  const applyMatch = /HONCHATSTANDALONEAPPLY\|(\d+)/.exec(line)
+  if (applyMatch) {
+    const sequence = parseInt(applyMatch[1], 10)
+    const writeTime = inboxWriteTimes.get(sequence)
+    if (writeTime !== undefined) {
+      inboxWriteTimes.delete(sequence)
+      logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeTime) + 'ms')
+    }
+  }
+  const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0/.exec(line)
+  if (missedMatch) {
+    retryLastDelivery()
+  }
   if (line.includes('HONCHA')) {
     if (!sawAnyRelayLine) {
       sawAnyRelayLine = true
