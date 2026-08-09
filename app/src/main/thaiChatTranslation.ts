@@ -209,7 +209,16 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\t\t\tfor index = 1, #channelHistory do',
   '\t\t\t\tlocal entry = channelHistory[index]',
   '\t\t\t\tif entry.prefix == originalPrefix and entry.message == originalMessage then',
-  '\t\t\t\t\tentry.message = translatedText',
+  "\t\t\t\t\tif originalMessage == '' then",
+  "\t\t\t\t\t\tlocal headEnd = string.find(originalPrefix, '%^%*: [^%^]*$')",
+  '\t\t\t\t\t\tif headEnd then',
+  '\t\t\t\t\t\t\tentry.prefix = string.sub(originalPrefix, 1, headEnd + 3) .. translatedText',
+  '\t\t\t\t\t\telse',
+  '\t\t\t\t\t\t\tentry.prefix = translatedText',
+  '\t\t\t\t\t\tend',
+  '\t\t\t\t\telse',
+  '\t\t\t\t\t\tentry.message = translatedText',
+  '\t\t\t\t\tend',
   '\t\t\t\t\treplacedCount = replacedCount + 1',
   '\t\t\t\tend',
   '\t\t\tend',
@@ -864,7 +873,9 @@ function handleChannelRelayLine(line: string): boolean {
   lastChannelRelayCounter = relayCounter
   const prefixRaw = decodeRelayField(match[4])
   const messageRaw = decodeRelayField(match[5])
-  const cleanMessage = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  const messageBody = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  const prefixBody = extractChatBody(prefixRaw)
+  const cleanMessage = messageBody.length > 0 ? messageBody : prefixBody
   if (!needsTranslation(cleanMessage)) {
     logLine('translation', 'channel chat skipped, no translation needed: ' + cleanMessage.slice(0, 60))
     return true
