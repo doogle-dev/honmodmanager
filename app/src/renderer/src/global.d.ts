@@ -55,6 +55,7 @@ interface ModManagerApi {
   clearTranslationCache: () => Promise<boolean>
   openTranslationCacheFolder: () => Promise<boolean>
   openLogsFolder: () => Promise<boolean>
+  openTranslationLog: () => Promise<boolean>
   onChatComposeShown: (listener: () => void) => void
 }
 

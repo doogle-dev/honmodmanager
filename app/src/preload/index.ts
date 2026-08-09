@@ -59,6 +59,7 @@ const modManagerApi = {
   clearTranslationCache: () => ipcRenderer.invoke('chatTranslation:clearCache'),
   openTranslationCacheFolder: () => ipcRenderer.invoke('chatTranslation:openCacheFolder'),
   openLogsFolder: () => ipcRenderer.invoke('logs:open'),
+  openTranslationLog: () => ipcRenderer.invoke('logs:openTranslation'),
   onChatComposeShown: (listener: () => void) => {
     ipcRenderer.on('chatCompose:shown', () => listener())
   }

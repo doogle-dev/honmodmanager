@@ -11,11 +11,14 @@ import {
   Plus,
   Puzzle,
   RefreshCw,
+  FileText,
   Github
 } from 'lucide-react'
 import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './uiTranslations'
 
 type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
+
+const TRANSLATION_FEATURE_FILE_NAME = 'ChatTranslation.feature'
 
 const ACCENT = '#3b6ea5'
 const ACCENT_TEXT = '#ffffff'
@@ -475,6 +478,15 @@ function App(): JSX.Element {
               style={mod.enabled ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
             >
               {mod.enabled ? t('enabled') : t('disabled')}
+            </button>
+          )}
+          {mod.installed && mod.fileName === TRANSLATION_FEATURE_FILE_NAME && (
+            <button
+              onClick={() => window.modManager.openTranslationLog()}
+              className="flex items-center gap-1.5 rounded border border-white/25 px-4 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {t('viewLog')}
             </button>
           )}
           {mod.installed && (

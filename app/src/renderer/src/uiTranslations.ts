@@ -56,6 +56,7 @@ const translations: Record<string, { en: string; th: string }> = {
   starting: { en: 'Starting...', th: 'กำลังเริ่ม...' },
   cancel: { en: 'Cancel', th: 'ยกเลิก' },
   restartNow: { en: 'Restart Now', th: 'รีสตาร์ทตอนนี้' },
+  viewLog: { en: 'View Log', th: 'ดูบันทึก' },
   updateReady: { en: 'Update {version} ready', th: 'อัปเดต {version} พร้อมแล้ว' },
   desktopShortcuts: { en: 'Desktop Shortcuts', th: 'ทางลัดบนเดสก์ท็อป' },
   desktopShortcutsDescription: {

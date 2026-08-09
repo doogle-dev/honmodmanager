@@ -25,7 +25,7 @@ import {
 import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
 import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
-import { logLine, logsDirectory } from './managerLogger'
+import { logLine, logsDirectory, translationLogPath } from './managerLogger'
 import type { Catalog } from './catalogClient'
 
 const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
@@ -566,6 +566,15 @@ function registerInterProcessHandlers(): void {
 
   ipcMain.handle('logs:open', () => {
     shell.openPath(logsDirectory())
+    return true
+  })
+
+  ipcMain.handle('logs:openTranslation', () => {
+    const translationLog = translationLogPath()
+    if (!existsSync(translationLog)) {
+      writeFileSync(translationLog, '')
+    }
+    shell.openPath(translationLog)
     return true
   })
 
