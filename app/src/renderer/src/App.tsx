@@ -43,8 +43,16 @@ function ModIcon({ mod, size }: { mod: CatalogMod; size: string }): JSX.Element 
   )
 }
 
-function formatMegabytes(byteCount: number): string {
-  return (byteCount / (1024 * 1024)).toFixed(1) + ' MB'
+function formatByteSize(byteCount: number): string {
+  const megabytes = byteCount / (1024 * 1024)
+  if (megabytes >= 1) {
+    return megabytes.toFixed(1) + ' MB'
+  }
+  const kilobytes = byteCount / 1024
+  if (kilobytes >= 1) {
+    return kilobytes.toFixed(0) + ' KB'
+  }
+  return byteCount + ' bytes'
 }
 
 function renderDescriptionText(description: string): JSX.Element {
@@ -187,7 +195,7 @@ function App(): JSX.Element {
 
   async function checkForUpdates(): Promise<void> {
     setCheckingForUpdates(true)
-    setUpdateMessage({ key: 'checking' })
+    setUpdateMessage(null)
     try {
       const result = await window.modManager.checkForUpdates()
       if (result.status === 'current') {
@@ -706,7 +714,7 @@ function App(): JSX.Element {
                     <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
                       <span>
                         {downloadProgress.total > 0
-                          ? formatMegabytes(downloadProgress.transferred) + ' / ' + formatMegabytes(downloadProgress.total)
+                          ? formatByteSize(downloadProgress.transferred) + ' / ' + formatByteSize(downloadProgress.total)
                           : t('starting')}
                         {downloadProgress.bytesPerSecond > 0 && ' at ' + formatSpeed(downloadProgress.bytesPerSecond)}
                       </span>
@@ -738,7 +746,7 @@ function App(): JSX.Element {
                 <p className="text-slate-400">{t('translationCacheDescription')}</p>
                 {cacheInfo && (
                   <p className="mt-2 text-slate-500">
-                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatMegabytes(cacheInfo.sizeBytes) })}
+                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatByteSize(cacheInfo.sizeBytes) })}
                   </p>
                 )}
                 <div className="mt-3 flex items-center gap-2">
