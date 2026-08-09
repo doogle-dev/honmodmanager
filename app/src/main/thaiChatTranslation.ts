@@ -375,7 +375,7 @@ function clearInboxFiles(): void {
     return
   }
   chatInboxEntries = []
-  rmSync(join(profileDirectory, 'ChatTranslatorInbox.lua'), { force: true })
+  writeFileSync(join(profileDirectory, 'ChatTranslatorInbox.lua'), INBOX_READY_MARKER_LINE + '\n')
   for (const entryName of readdirSync(profileDirectory)) {
     if (/^ChatTranslatorInbox\d+\.lua$/.test(entryName)) {
       rmSync(join(profileDirectory, entryName), { force: true })
@@ -383,6 +383,7 @@ function clearInboxFiles(): void {
   }
 }
 
+const INBOX_READY_MARKER_LINE = 'ChatTranslatorInboxOk = true'
 const INBOX_ENTRY_LIFETIME_MILLISECONDS = 120000
 const INBOX_ENTRY_LIMIT = 20
 
@@ -404,13 +405,11 @@ function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: 
     return
   }
   const inboxPath = join(profileDirectory, fileName)
-  if (entries.length === 0) {
-    rmSync(inboxPath, { force: true })
-    return
-  }
-  const fileLines = entries.map(
-    (entry) =>
-      'if ' + applyFunctionName + ' then ' + applyFunctionName + '(' + entry.sequence + ', function() ' + entry.luaCall + ' end) end'
+  const fileLines = [INBOX_READY_MARKER_LINE].concat(
+    entries.map(
+      (entry) =>
+        'if ' + applyFunctionName + ' then ' + applyFunctionName + '(' + entry.sequence + ', function() ' + entry.luaCall + ' end) end'
+    )
   )
   writeFileSync(inboxPath, fileLines.join('\n') + '\n')
 }
@@ -449,7 +448,7 @@ function clearChannelInboxFiles(): void {
     return
   }
   channelInboxEntries = []
-  rmSync(join(profileDirectory, 'ChannelTranslatorInbox.lua'), { force: true })
+  writeFileSync(join(profileDirectory, 'ChannelTranslatorInbox.lua'), INBOX_READY_MARKER_LINE + '\n')
   for (const entryName of readdirSync(profileDirectory)) {
     if (/^ChannelTranslatorInbox\d+\.lua$/.test(entryName)) {
       rmSync(join(profileDirectory, entryName), { force: true })
