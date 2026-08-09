@@ -104,8 +104,9 @@ function App(): JSX.Element {
   const [updateReadyVersion, setUpdateReadyVersion] = useState('')
   const [downloadProgress, setDownloadProgress] = useState<UpdateProgress | null>(null)
   const [appVersion, setAppVersion] = useState('')
-  const [updateCheckMessage, setUpdateCheckMessage] = useState('')
+  const [updateMessage, setUpdateMessage] = useState<{ key: string; params?: Record<string, string | number> } | null>(null)
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false)
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
@@ -121,6 +122,7 @@ function App(): JSX.Element {
     try {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
+      setCatalogUnavailable(Boolean(result.catalogError))
       if (result.catalogError) {
         setStatus(t('catalogOffline'))
       }
@@ -139,14 +141,15 @@ function App(): JSX.Element {
     window.modManager.onUpdateDownloaded((version) => {
       setDownloadProgress(null)
       setUpdateReadyVersion(version)
+      setUpdateMessage({ key: 'updateReadyRestart', params: { version } })
     })
     window.modManager.onUpdateCancelled(() => {
       setDownloadProgress(null)
-      setUpdateCheckMessage(t('downloadCancelled'))
+      setUpdateMessage({ key: 'downloadCancelled' })
     })
     window.modManager.onUpdateError((message) => {
       setDownloadProgress(null)
-      setUpdateCheckMessage(t('updateDownloadFailed', { error: message }))
+      setUpdateMessage({ key: 'updateDownloadFailed', params: { error: message } })
     })
     window.modManager.getAppInfo().then((appInfo) => {
       setAppVersion(appInfo.version)
@@ -184,19 +187,19 @@ function App(): JSX.Element {
 
   async function checkForUpdates(): Promise<void> {
     setCheckingForUpdates(true)
-    setUpdateCheckMessage(t('checking'))
+    setUpdateMessage({ key: 'checking' })
     try {
       const result = await window.modManager.checkForUpdates()
       if (result.status === 'current') {
-        setUpdateCheckMessage(t('onLatestVersion'))
+        setUpdateMessage({ key: 'onLatestVersion' })
       } else if (result.status === 'downloading') {
         setUpdateReadyVersion('')
         setDownloadProgress({ percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 })
-        setUpdateCheckMessage(t('updateFound', { version: result.version ?? '' }))
+        setUpdateMessage({ key: 'updateFound', params: { version: result.version ?? '' } })
       } else if (result.status === 'unavailable') {
-        setUpdateCheckMessage(t('updatesUnavailable'))
+        setUpdateMessage({ key: 'updatesUnavailable' })
       } else {
-        setUpdateCheckMessage(t('updateCheckFailed', { error: result.message ?? t('unknown') }))
+        setUpdateMessage({ key: 'updateCheckFailed', params: { error: result.message ?? t('unknown') } })
       }
     } finally {
       setCheckingForUpdates(false)
@@ -610,7 +613,9 @@ function App(): JSX.Element {
             <div className="flex h-full">
               <div className="min-w-0 flex-1 overflow-y-auto">
                 {filteredBrowseMods.length === 0 ? (
-                  <p className="px-8 py-5 text-sm text-slate-500">{t('noModsMatch')}</p>
+                  <p className="px-8 py-5 text-sm text-slate-500">
+                    {catalogUnavailable ? t('catalogUnavailable') : t('noModsMatch')}
+                  </p>
                 ) : (
                   filteredBrowseMods.map((mod) => renderModListRow(mod, mod.fileName === selectedBrowseMod?.fileName))
                 )}
@@ -677,7 +682,7 @@ function App(): JSX.Element {
                   ) : (
                     <button
                       onClick={checkForUpdates}
-                      disabled={checkingForUpdates}
+                      disabled={checkingForUpdates || downloadProgress !== null}
                       className="shrink-0 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125 disabled:opacity-70"
                       style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
                     >
@@ -685,7 +690,7 @@ function App(): JSX.Element {
                     </button>
                   )}
                 </div>
-                {updateCheckMessage && <p className="mt-3 text-slate-400">{updateCheckMessage}</p>}
+                {updateMessage && <p className="mt-3 text-slate-400">{t(updateMessage.key, updateMessage.params)}</p>}
                 {downloadProgress && (
                   <div className="mt-3">
                     <div className="mb-1 flex items-center justify-between text-xs text-slate-400">

@@ -119,6 +119,14 @@ const translations: Record<string, { en: string; th: string }> = {
     en: 'Update {version} found. Downloading now, the restart button will appear when it is ready.',
     th: 'พบอัปเดต {version} กำลังดาวน์โหลด ปุ่มรีสตาร์ทจะแสดงเมื่อพร้อม'
   },
+  updateReadyRestart: {
+    en: 'Update {version} is ready. Click Restart Now to install it.',
+    th: 'อัปเดต {version} พร้อมติดตั้งแล้ว กดรีสตาร์ทตอนนี้เพื่อติดตั้ง'
+  },
+  catalogUnavailable: {
+    en: 'Cannot reach the mod catalog right now. Check your internet connection and try again.',
+    th: 'เชื่อมต่อแคตตาล็อกม็อดไม่ได้ในตอนนี้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'
+  },
   updatesUnavailable: { en: 'Updates only work in the installed app.', th: 'อัปเดตใช้ได้เฉพาะแอปที่ติดตั้งแล้ว' },
   updateCheckFailed: { en: 'Update check failed: {error}', th: 'ตรวจสอบอัปเดตไม่สำเร็จ: {error}' },
   updateDownloadFailed: { en: 'Update download failed: {error}', th: 'ดาวน์โหลดอัปเดตไม่สำเร็จ: {error}' },
