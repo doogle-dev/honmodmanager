@@ -151,11 +151,17 @@ export interface ExtraFileEdit {
   replace: string
 }
 
+export interface ExtraFileAddition {
+  targetPath: string
+  contents: string
+}
+
 export function applyHonmods(
   honmodPaths: string[],
   baseArchivePath: string,
   outputPath: string,
-  extraEdits: ExtraFileEdit[] = []
+  extraEdits: ExtraFileEdit[] = [],
+  extraFiles: ExtraFileAddition[] = []
 ): ApplyResult {
   let modifiedFiles = new Map<string, Buffer>()
   const skippedMods: string[] = []
@@ -201,9 +207,12 @@ export function applyHonmods(
         }
         stagedFiles.set(edit.targetPath, Buffer.from(fileText.replaceAll(edit.find, () => edit.replace), 'utf8'))
       }
+      for (const addition of extraFiles) {
+        stagedFiles.set(addition.targetPath, Buffer.from(addition.contents, 'utf8'))
+      }
       modifiedFiles = stagedFiles
     } catch {
-      if (extraEdits.length > 0) {
+      if (extraEdits.length > 0 || extraFiles.length > 0) {
         skippedMods.push('Thai Chat Translation')
       }
     }

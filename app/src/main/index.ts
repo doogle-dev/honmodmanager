@@ -22,6 +22,7 @@ import {
   stopThaiChatTranslation,
   isThaiChatTranslationActive
 } from './thaiChatTranslation'
+import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
 import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory } from './managerLogger'
@@ -187,15 +188,20 @@ function chatTranslationSettingsPath(): string {
   return join(app.getPath('userData'), 'chat-translation.json')
 }
 
-function loadChatTranslationSettings(): { enabled: boolean; targetLanguage: 'en' | 'th' } {
+function loadChatTranslationSettings(): {
+  enabled: boolean
+  targetLanguage: 'en' | 'th'
+  useStandaloneHooks: boolean
+} {
   try {
     const stored = JSON.parse(readFileSync(chatTranslationSettingsPath(), 'utf8'))
     return {
       enabled: stored.enabled === true,
-      targetLanguage: stored.targetLanguage === 'th' ? 'th' : 'en'
+      targetLanguage: stored.targetLanguage === 'th' ? 'th' : 'en',
+      useStandaloneHooks: stored.useStandaloneHooks === true
     }
   } catch {
-    return { enabled: false, targetLanguage: 'en' }
+    return { enabled: false, targetLanguage: 'en', useStandaloneHooks: false }
   }
 }
 
@@ -204,7 +210,11 @@ function loadChatTranslationEnabled(): boolean {
 }
 
 function saveChatTranslationSettings(enabled: boolean, targetLanguage: 'en' | 'th'): void {
-  writeFileSync(chatTranslationSettingsPath(), JSON.stringify({ enabled, targetLanguage }, null, 2))
+  const useStandaloneHooks = loadChatTranslationSettings().useStandaloneHooks
+  writeFileSync(
+    chatTranslationSettingsPath(),
+    JSON.stringify({ enabled, targetLanguage, useStandaloneHooks }, null, 2)
+  )
 }
 
 function saveChatTranslationEnabled(enabled: boolean): void {
@@ -238,15 +248,28 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
   const juvioRoot = locateJuvioRoot()
   const overlayPath = modsOverlayArchivePath(juvioRoot)
   const enabledPaths = listHonmodPaths().filter((honmodPath) => enabledFileNames.includes(basename(honmodPath)))
-  const extraEdits = loadChatTranslationEnabled() ? chatRelayLuaEdits : []
-  logLine('apply', 'chat translation relay edits included: ' + (extraEdits.length > 0 ? 'yes' : 'no'))
+  const translationSettings = loadChatTranslationSettings()
+  const useStandaloneHooks = translationSettings.useStandaloneHooks
+  const extraEdits = translationSettings.enabled
+    ? useStandaloneHooks
+      ? chatTranslationStandaloneEdits
+      : chatRelayLuaEdits
+    : []
+  const extraFiles = translationSettings.enabled && useStandaloneHooks ? chatTranslationStandaloneFiles : []
+  logLine(
+    'apply',
+    'chat translation relay edits included: ' +
+      (extraEdits.length > 0 ? 'yes' : 'no') +
+      ', mode: ' +
+      (useStandaloneHooks ? 'standalone hooks (test)' : 'inline injection')
+  )
   if (enabledPaths.length === 0 && extraEdits.length === 0) {
     if (existsSync(overlayPath)) {
       rmSync(overlayPath)
     }
     return { fileCount: 0, skippedMods: [] }
   }
-  const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath, extraEdits)
+  const result = applyHonmods(enabledPaths, baseArchivePath(juvioRoot), overlayPath, extraEdits, extraFiles)
   logLine(
     'apply',
     'applied ' + result.fileCount + ' files from ' + enabledPaths.length + ' mods' +
