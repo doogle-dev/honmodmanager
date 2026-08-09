@@ -19,6 +19,7 @@ import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './
 type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
 
 const TRANSLATION_FEATURE_FILE_NAME = 'ChatTranslation.feature'
+const CACHE_LIMIT_BYTES = 20 * 1024 * 1024
 
 const ACCENT = '#3b6ea5'
 const ACCENT_TEXT = '#ffffff'
@@ -562,6 +563,27 @@ function App(): JSX.Element {
           <div className="flex items-center gap-2.5 text-white">
             {pageIcons[page]}
             <h1 className="text-lg font-bold text-white">{pageTitles[page]}</h1>
+            {page === 'settings' && (
+              <div className="ml-auto flex items-center gap-2 text-[13px] font-normal">
+                <span className="text-slate-400">
+                  {t('version')} {appVersion || t('unknown')}
+                </span>
+                <span className="text-slate-600">|</span>
+                {updateReadyVersion ? (
+                  <button onClick={() => window.modManager.installUpdate()} className="text-[#7fb2e5] hover:underline">
+                    {t('restartNow')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={checkForUpdates}
+                    disabled={checkingForUpdates || downloadProgress !== null}
+                    className="text-[#7fb2e5] hover:underline disabled:opacity-60"
+                  >
+                    {checkingForUpdates ? t('checking') : t('checkForUpdates')}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           {page === 'browse' && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -662,132 +684,146 @@ function App(): JSX.Element {
           )}
 
           {page === 'settings' && (
-            <div className="grid max-w-xl grid-cols-1 items-start gap-4 text-sm lg:max-w-5xl lg:grid-cols-2">
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('language')}</h2>
-                <p className="text-slate-400">{t('languageDescription')}</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => changeUiLanguage('en')}
-                    className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'en' ? 'text-white' : 'bg-black/30 text-slate-400')}
-                    style={uiLanguage === 'en' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
-                  >
-                    <EnglishFlag />
-                    English
-                  </button>
-                  <button
-                    onClick={() => changeUiLanguage('th')}
-                    className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'th' ? 'text-white' : 'bg-black/30 text-slate-400')}
-                    style={uiLanguage === 'th' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
-                  >
-                    <ThaiFlag />
-                    ไทย
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="mb-1 font-semibold text-white">{t('updates')}</h2>
-                    <p className="text-slate-400">{t('currentVersion')} {appVersion || t('unknown')}</p>
-                  </div>
-                  {updateReadyVersion ? (
-                    <button
-                      onClick={() => window.modManager.installUpdate()}
-                      className="shrink-0 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
-                      style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
-                    >
-                      {t('restartNow')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={checkForUpdates}
-                      disabled={checkingForUpdates || downloadProgress !== null}
-                      className="shrink-0 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125 disabled:opacity-70"
-                      style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
-                    >
-                      {checkingForUpdates ? t('checking') : t('checkForUpdates')}
-                    </button>
+            <div className="mx-auto max-w-4xl space-y-6 text-sm">
+              {(updateMessage || downloadProgress) && (
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  {updateMessage && <p className="text-slate-400">{t(updateMessage.key, updateMessage.params)}</p>}
+                  {downloadProgress && (
+                    <div className={updateMessage ? 'mt-3' : ''}>
+                      <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                        <span>{t('downloadingUpdate')}</span>
+                        <span>{downloadProgress.percent}%</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
+                        <div
+                          className="h-full rounded-full transition-[width] duration-200"
+                          style={{ width: downloadProgress.percent + '%', backgroundColor: ACCENT }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
+                        <span>
+                          {downloadProgress.total > 0
+                            ? formatByteSize(downloadProgress.transferred) + ' / ' + formatByteSize(downloadProgress.total)
+                            : t('starting')}
+                          {downloadProgress.bytesPerSecond > 0 && ' at ' + formatSpeed(downloadProgress.bytesPerSecond)}
+                        </span>
+                        <button
+                          onClick={() => window.modManager.cancelUpdate()}
+                          className="rounded px-2.5 py-1 font-normal text-white hover:brightness-125"
+                          style={{ backgroundColor: '#5b6070' }}
+                        >
+                          {t('cancel')}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
-                {updateMessage && <p className="mt-3 text-slate-400">{t(updateMessage.key, updateMessage.params)}</p>}
-                {downloadProgress && (
-                  <div className="mt-3">
-                    <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
-                      <span>{t('downloadingUpdate')}</span>
-                      <span>{downloadProgress.percent}%</span>
+              )}
+
+              <section className="space-y-3">
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('languageAndChatSection')}</h2>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('language')}</h3>
+                      <p className="text-slate-400">{t('languageDescription')}</p>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
-                      <div
-                        className="h-full rounded-full transition-[width] duration-200"
-                        style={{ width: downloadProgress.percent + '%', backgroundColor: ACCENT }}
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400">
-                      <span>
-                        {downloadProgress.total > 0
-                          ? formatByteSize(downloadProgress.transferred) + ' / ' + formatByteSize(downloadProgress.total)
-                          : t('starting')}
-                        {downloadProgress.bytesPerSecond > 0 && ' at ' + formatSpeed(downloadProgress.bytesPerSecond)}
-                      </span>
+                    <div className="flex shrink-0 gap-2">
                       <button
-                        onClick={() => window.modManager.cancelUpdate()}
-                        className="rounded px-2.5 py-1 font-normal text-white hover:brightness-125"
-                        style={{ backgroundColor: '#5b6070' }}
+                        onClick={() => changeUiLanguage('en')}
+                        className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'en' ? 'text-white' : 'bg-black/30 text-slate-400')}
+                        style={uiLanguage === 'en' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
                       >
-                        {t('cancel')}
+                        <EnglishFlag />
+                        English
+                      </button>
+                      <button
+                        onClick={() => changeUiLanguage('th')}
+                        className={'flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-normal ' + (uiLanguage === 'th' ? 'text-white' : 'bg-black/30 text-slate-400')}
+                        style={uiLanguage === 'th' ? { backgroundColor: ACCENT, color: ACCENT_TEXT } : undefined}
+                      >
+                        <ThaiFlag />
+                        ไทย
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('desktopShortcuts')}</h2>
-                <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
-                <button
-                  onClick={createDesktopShortcuts}
-                  className="mt-3 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
-                  style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
-                >
-                  {t('createShortcuts')}
-                </button>
-                {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('translationCache')}</h2>
-                <p className="text-slate-400">{t('translationCacheDescription')}</p>
-                {cacheInfo && (
-                  <p className="mt-2 text-slate-500">
-                    {t('savedTranslations', { count: cacheInfo.entryCount, size: formatByteSize(cacheInfo.sizeBytes) })}
-                  </p>
-                )}
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    onClick={clearTranslationCache}
-                    className="rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
-                    style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
-                  >
-                    {t('clearCache')}
-                  </button>
-                  <button
-                    onClick={() => window.modManager.openTranslationCacheFolder()}
-                    className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
-                  >
-                    {t('openCacheFolder')}
-                  </button>
                 </div>
-              </div>
-              <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                <h2 className="mb-2 font-semibold text-white">{t('logs')}</h2>
-                <p className="text-slate-400">{t('logsDescription')}</p>
-                <button
-                  onClick={() => window.modManager.openLogsFolder()}
-                  className="mt-3 rounded-md px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
-                  style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
-                >
-                  {t('openLogsFolder')}
-                </button>
-              </div>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="mb-1 font-semibold text-white">{t('translationCache')}</h3>
+                      <p className="text-slate-400">{t('translationCacheDescription')}</p>
+                      {cacheInfo && (
+                        <div className="mt-3 flex items-center gap-3">
+                          <span className="shrink-0 text-slate-500">
+                            {t('savedTranslations', { count: cacheInfo.entryCount, size: formatByteSize(cacheInfo.sizeBytes) })}
+                          </span>
+                          <div className="h-1.5 w-40 overflow-hidden rounded-full bg-black/40">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: Math.max(1, Math.min(100, (cacheInfo.sizeBytes / CACHE_LIMIT_BYTES) * 100)) + '%',
+                                backgroundColor: ACCENT
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex w-[168px] shrink-0 flex-col gap-2">
+                      <button
+                        onClick={clearTranslationCache}
+                        className="rounded-md border border-[#c96a6a]/50 px-3 py-1.5 text-[13px] font-normal text-[#e08a8a] hover:bg-[#c96a6a]/20"
+                      >
+                        {t('clearCache')}
+                      </button>
+                      <button
+                        onClick={() => window.modManager.openTranslationCacheFolder()}
+                        className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
+                      >
+                        {t('openCacheFolder')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('systemSection')}</h2>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('desktopShortcuts')}</h3>
+                      <p className="text-slate-400">{t('desktopShortcutsDescription')}</p>
+                      {shortcutStatusMessage && <p className="mt-3 text-slate-400">{shortcutStatusMessage}</p>}
+                    </div>
+                    <button
+                      onClick={createDesktopShortcuts}
+                      className="shrink-0 rounded-md bg-[#35753a] px-4 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                    >
+                      {t('createShortcuts')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('logs')}</h3>
+                      <p className="text-slate-400">{t('logsDescription')}</p>
+                    </div>
+                    <button
+                      onClick={() => window.modManager.openLogsFolder()}
+                      className="shrink-0 rounded-md border border-white/10 bg-white/5 px-4 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
+                    >
+                      {t('openLogsFolder')}
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>
           )}
 
