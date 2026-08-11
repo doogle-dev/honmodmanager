@@ -10,7 +10,7 @@ publish:
   owner: doogle-dev
   repo: honmodmanager
   channel: dev
-  releaseType: prerelease
+  releaseType: draft
 win:
   target: nsis
   artifactName: ${name}-${version}-setup.${ext}
