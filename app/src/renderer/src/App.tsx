@@ -116,6 +116,7 @@ function App(): JSX.Element {
   const [updateReadyVersion, setUpdateReadyVersion] = useState('')
   const [downloadProgress, setDownloadProgress] = useState<UpdateProgress | null>(null)
   const [appVersion, setAppVersion] = useState('')
+  const [isDevBuild, setIsDevBuild] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<{ key: string; params?: Record<string, string | number> } | null>(null)
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
@@ -165,7 +166,9 @@ function App(): JSX.Element {
     })
     window.modManager.getAppInfo().then((appInfo) => {
       setAppVersion(appInfo.version)
-      document.title = 'Heroes of Newerth Reborn Mod Manager v' + appInfo.version
+      setIsDevBuild(appInfo.isDevBuild)
+      document.title =
+        'Heroes of Newerth Reborn Mod Manager' + (appInfo.isDevBuild ? ' Dev' : '') + ' v' + appInfo.version
     })
     window.modManager.getTranslationCacheInfo().then(setCacheInfo)
     window.modManager.setChatTranslationLanguage(loadUiLanguage())
@@ -563,6 +566,11 @@ function App(): JSX.Element {
           <div className="flex items-center gap-2.5 text-white">
             {pageIcons[page]}
             <h1 className="text-lg font-bold text-white">{pageTitles[page]}</h1>
+            {isDevBuild && (
+              <span className="rounded bg-[#8a5a1f] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+                Dev
+              </span>
+            )}
             {page === 'settings' && (
               <div className="ml-auto flex items-center gap-2 text-[13px] font-normal">
                 <span className="text-slate-400">

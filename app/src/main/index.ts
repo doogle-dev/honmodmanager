@@ -47,6 +47,12 @@ function catalogBaseUrl(): string {
   return app.isPackaged ? PUBLIC_CATALOG_URL : DEVELOPMENT_CATALOG_URL
 }
 
+const DEV_UPDATE_CHANNEL = 'dev'
+
+function isDevChannelBuild(): boolean {
+  return app.getName().endsWith('-dev')
+}
+
 const MOD_SETTINGS_PROFILE_NAME = 'mods'
 const REAL_SETTINGS_PROFILE_NAME = 'Heroes of Newerth'
 const SETTINGS_FILE_NAMES = ['startup.cfg', 'game_settings_local.cfg', 'voice_config.cfg']
@@ -581,7 +587,8 @@ function registerInterProcessHandlers(): void {
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
     catalogUrl: catalogBaseUrl(),
-    libraryPath: honmodLibraryDirectory()
+    libraryPath: honmodLibraryDirectory(),
+    isDevBuild: isDevChannelBuild()
   }))
 
   ipcMain.handle('updater:install', () => {
@@ -778,6 +785,11 @@ app.whenReady().then(() => {
   resumeTranslationSessionIfGameRunning()
 
   if (app.isPackaged) {
+    if (isDevChannelBuild()) {
+      autoUpdater.channel = DEV_UPDATE_CHANNEL
+      autoUpdater.allowPrerelease = true
+      logLine('app', 'dev build, following the ' + DEV_UPDATE_CHANNEL + ' update channel')
+    }
     autoUpdater.autoDownload = false
     autoUpdater.on('download-progress', (progress) => {
       mainWindowReference?.webContents.send('updater:progress', {

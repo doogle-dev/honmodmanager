@@ -1,0 +1,22 @@
+appId: com.doogle.honrebornmodmanager.dev
+productName: HoN Reborn Mod Manager Dev
+directories:
+  buildResources: build
+files:
+  - out/**
+  - package.json
+publish:
+  provider: github
+  owner: doogle-dev
+  repo: honmodmanager
+  channel: dev
+  releaseType: prerelease
+win:
+  target: nsis
+  artifactName: ${name}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false
+  shortcutName: HoN Reborn Mod Manager Dev

@@ -22,6 +22,7 @@ interface AppInfo {
   version: string
   catalogUrl: string
   libraryPath: string
+  isDevBuild: boolean
 }
 
 interface ModManagerApi {

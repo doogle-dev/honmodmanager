@@ -1,0 +1,70 @@
+name: Dev Release
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Stamp the dev identity
+        shell: bash
+        run: |
+          baseVersion=$(node -p "require('./package.json').version.split('-')[0]")
+          devVersion="$baseVersion-dev.${{ github.run_number }}"
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            data.name = 'hon-reborn-mod-manager-dev';
+            data.version = '$devVersion';
+            fs.writeFileSync('package.json', JSON.stringify(data, null, 2) + '\n');
+          "
+          echo "devVersion=$devVersion" >> "$GITHUB_ENV"
+          echo "Building dev version $devVersion"
+      - run: npx electron-vite build
+      - name: Build and publish the dev installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --config electron-builder.dev.yml --publish always
+      - name: Confirm every asset reached the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$devVersion"
+          for asset in dist/*.exe dist/*.blockmap dist/dev.yml; do
+            name=$(basename "$asset")
+            if ! gh release view "$tag" --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -qx "$name"; then
+              echo "Uploading missing asset $name"
+              gh release upload "$tag" "$asset" --repo ${{ github.repository }}
+            fi
+          done
+          gh release view "$tag" --repo ${{ github.repository }} --json isDraft,isPrerelease,assets \
+            -q '{draft: .isDraft, prerelease: .isPrerelease, assets: [.assets[].name]}'
+      - name: Publish the release so the dev app can see it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v$devVersion" --repo ${{ github.repository }} --draft=false --prerelease
