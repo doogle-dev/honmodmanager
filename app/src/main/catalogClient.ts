@@ -30,12 +30,39 @@ export function resolveCatalogUrl(baseUrl: string, relativePath: string): string
   return withoutTrailingSlash(baseUrl) + '/' + relativePath.replace(/^\/+/, '')
 }
 
-export async function fetchCatalog(baseUrl: string): Promise<Catalog> {
-  const response = await fetch(withoutTrailingSlash(baseUrl) + '/catalog.json')
+export interface FetchedCatalog {
+  catalog: Catalog
+  baseUrl: string
+}
+
+const CATALOG_HOST_TIMEOUT_MILLISECONDS = 12000
+
+async function fetchCatalogFromBase(baseUrl: string): Promise<Catalog> {
+  const response = await fetch(withoutTrailingSlash(baseUrl) + '/catalog.json', {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(CATALOG_HOST_TIMEOUT_MILLISECONDS)
+  })
   if (!response.ok) {
     throw new Error('Catalog request failed with status ' + response.status)
   }
-  return (await response.json()) as Catalog
+  const catalog = (await response.json()) as Catalog
+  if (!catalog || !Array.isArray(catalog.mods)) {
+    throw new Error('Catalog response was not a mod catalog')
+  }
+  return catalog
+}
+
+export async function fetchCatalog(baseUrls: string[]): Promise<FetchedCatalog> {
+  const failures: string[] = []
+  for (const baseUrl of baseUrls) {
+    try {
+      const catalog = await fetchCatalogFromBase(baseUrl)
+      return { catalog, baseUrl }
+    } catch (error) {
+      failures.push(baseUrl + ': ' + String(error))
+    }
+  }
+  throw new Error('Every catalog host failed. ' + failures.join(' | '))
 }
 
 export async function downloadAndVerify(url: string, expectedSha256: string): Promise<Buffer> {

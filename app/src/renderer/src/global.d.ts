@@ -16,6 +16,7 @@ interface CatalogMod {
 interface CatalogListResult {
   mods: CatalogMod[]
   catalogError: string
+  catalogFromCache: boolean
 }
 
 interface AppInfo {

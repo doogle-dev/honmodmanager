@@ -30,7 +30,11 @@ import type { Catalog } from './catalogClient'
 
 const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
-const PUBLIC_CATALOG_URL = 'https://raw.githubusercontent.com/doogle-dev/honmodmanager/main/server/catalog'
+const PUBLIC_CATALOG_URLS = [
+  'https://doogle-dev.github.io/honmodmanager/server/catalog',
+  'https://raw.githubusercontent.com/doogle-dev/honmodmanager/main/server/catalog',
+  'https://cdn.jsdelivr.net/gh/doogle-dev/honmodmanager@main/server/catalog'
+]
 
 function honmodLibraryDirectory(): string {
   const directory = app.isPackaged
@@ -40,11 +44,60 @@ function honmodLibraryDirectory(): string {
   return directory
 }
 
-function catalogBaseUrl(): string {
+function catalogBaseUrls(): string[] {
   if (process.env.HON_CATALOG_URL) {
-    return process.env.HON_CATALOG_URL
+    return [process.env.HON_CATALOG_URL]
   }
-  return app.isPackaged ? PUBLIC_CATALOG_URL : DEVELOPMENT_CATALOG_URL
+  return app.isPackaged ? PUBLIC_CATALOG_URLS : [DEVELOPMENT_CATALOG_URL]
+}
+
+let activeCatalogBaseUrl = ''
+
+function catalogBaseUrl(): string {
+  return activeCatalogBaseUrl || catalogBaseUrls()[0]
+}
+
+function catalogCachePath(): string {
+  return join(app.getPath('userData'), 'catalog-cache.json')
+}
+
+function rememberCatalog(fetched: { catalog: Catalog; baseUrl: string }): void {
+  activeCatalogBaseUrl = fetched.baseUrl
+  try {
+    writeFileSync(catalogCachePath(), JSON.stringify(fetched))
+  } catch (error) {
+    logLine('app', 'could not save the catalog cache: ' + String(error))
+  }
+}
+
+function recallCatalog(): { catalog: Catalog; baseUrl: string } | null {
+  try {
+    const cached = JSON.parse(readFileSync(catalogCachePath(), 'utf8')) as { catalog: Catalog; baseUrl: string }
+    if (cached && cached.catalog && Array.isArray(cached.catalog.mods) && cached.baseUrl) {
+      return cached
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function loadCatalogWithFallback(): Promise<{ catalog: Catalog | null; catalogError: string; catalogFromCache: boolean }> {
+  try {
+    const fetched = await fetchCatalog(catalogBaseUrls())
+    rememberCatalog(fetched)
+    return { catalog: fetched.catalog, catalogError: '', catalogFromCache: false }
+  } catch (error) {
+    const catalogError = String(error)
+    logLine('error', 'catalog fetch failed on every host: ' + catalogError)
+    const cached = recallCatalog()
+    if (cached) {
+      activeCatalogBaseUrl = cached.baseUrl
+      logLine('app', 'showing the cached catalog from ' + cached.baseUrl)
+      return { catalog: cached.catalog, catalogError, catalogFromCache: true }
+    }
+    return { catalog: null, catalogError, catalogFromCache: false }
+  }
 }
 
 const DEV_UPDATE_CHANNEL = 'dev'
@@ -444,13 +497,7 @@ function registerInterProcessHandlers(): void {
       installedMetadata.set(metadata.fileName, metadata)
     }
 
-    let catalog: Catalog | null = null
-    let catalogError = ''
-    try {
-      catalog = await fetchCatalog(catalogBaseUrl())
-    } catch (error) {
-      catalogError = String(error)
-    }
+    const { catalog, catalogError, catalogFromCache } = await loadCatalogWithFallback()
 
     const rows = []
     const seenFileNames = new Set<string>()
@@ -517,7 +564,7 @@ function registerInterProcessHandlers(): void {
       updateAvailable: false
     })
 
-    return { mods: rows, catalogError }
+    return { mods: rows, catalogError, catalogFromCache }
   })
 
   ipcMain.handle('catalog:install', async (_event, fileName: string) => {
@@ -525,7 +572,9 @@ function registerInterProcessHandlers(): void {
       saveChatTranslationEnabled(true)
       return true
     }
-    const catalog = await fetchCatalog(catalogBaseUrl())
+    const fetched = await fetchCatalog(catalogBaseUrls())
+    rememberCatalog(fetched)
+    const catalog = fetched.catalog
     const entry = catalog.mods.find((mod) => mod.fileName === fileName)
     if (!entry) {
       throw new Error('The mod was not found in the catalog: ' + fileName)

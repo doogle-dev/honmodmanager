@@ -116,6 +116,10 @@ const translations: Record<string, { en: string; th: string }> = {
     en: 'Catalog offline. Showing installed mods only.',
     th: 'แคตตาล็อกออฟไลน์ แสดงเฉพาะม็อดที่ติดตั้งแล้ว'
   },
+  catalogCached: {
+    en: 'Catalog offline. Showing the last catalog this app saw, installs will resume when it is back.',
+    th: 'แคตตาล็อกออฟไลน์ กำลังแสดงแคตตาล็อกล่าสุดที่เคยโหลดไว้ การติดตั้งจะกลับมาใช้ได้เมื่อเชื่อมต่อได้อีกครั้ง'
+  },
   byAuthor: { en: 'by {author}', th: 'โดย {author}' },
   unknown: { en: 'unknown', th: 'ไม่ทราบ' },
   onLatestVersion: { en: 'You are on the latest version.', th: 'คุณใช้เวอร์ชันล่าสุดอยู่แล้ว' },

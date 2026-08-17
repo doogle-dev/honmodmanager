@@ -135,9 +135,9 @@ function App(): JSX.Element {
     try {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
-      setCatalogUnavailable(Boolean(result.catalogError))
+      setCatalogUnavailable(Boolean(result.catalogError) && !result.catalogFromCache)
       if (result.catalogError) {
-        setStatus(t('catalogOffline'))
+        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline'))
       }
     } catch (error) {
       setStatus(t('loadFailed', { error: String(error) }))
@@ -232,7 +232,7 @@ function App(): JSX.Element {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
       if (result.catalogError) {
-        setStatus(t('catalogOffline'))
+        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline'))
         return
       }
       const updateCount = result.mods.filter((mod) => mod.updateAvailable).length
