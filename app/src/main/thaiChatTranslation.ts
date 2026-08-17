@@ -144,7 +144,70 @@ const CHAT_DEFINITIONS_BODY = [
   '\t\tend',
   '\tend)',
   'end',
+  '',
+  "ChatTranslatorAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'",
+  '',
+  'function ChatTranslatorEncode(input)',
+  '\tlocal output = {}',
+  '\tfor index = 1, #input, 3 do',
+  '\t\tlocal byteOne = string.byte(input, index)',
+  '\t\tlocal byteTwo = string.byte(input, index + 1)',
+  '\t\tlocal byteThree = string.byte(input, index + 2)',
+  '\t\tlocal chunk = byteOne * 65536 + (byteTwo or 0) * 256 + (byteThree or 0)',
+  '\t\tlocal charFour = chunk % 64',
+  '\t\tchunk = (chunk - charFour) / 64',
+  '\t\tlocal charThree = chunk % 64',
+  '\t\tchunk = (chunk - charThree) / 64',
+  '\t\tlocal charTwo = chunk % 64',
+  '\t\tchunk = (chunk - charTwo) / 64',
+  '\t\tlocal charOne = chunk % 64',
+  '\t\ttable.insert(output, string.sub(ChatTranslatorAlphabet, charOne + 1, charOne + 1))',
+  '\t\ttable.insert(output, string.sub(ChatTranslatorAlphabet, charTwo + 1, charTwo + 1))',
+  "\t\ttable.insert(output, byteTwo and string.sub(ChatTranslatorAlphabet, charThree + 1, charThree + 1) or '=')",
+  "\t\ttable.insert(output, byteThree and string.sub(ChatTranslatorAlphabet, charFour + 1, charFour + 1) or '=')",
+  '\tend',
+  '\treturn table.concat(output)',
+  'end',
+  '',
+  'function ChatWhisperTranslatorDeliver(prefixEncoded, messageEncoded, translatedEncoded)',
+  '\tpcall(function()',
+  '\t\tlocal originalPrefix = ChatTranslatorDecode(prefixEncoded)',
+  '\t\tlocal originalMessage = ChatTranslatorDecode(messageEncoded)',
+  '\t\tlocal translatedText = ChatTranslatorDecode(translatedEncoded)',
+  "\t\tif translatedText == '' then return end",
+  '\t\tlocal replacedCount = 0',
+  '\t\tfor index = 1, #GameChat.gameChat do',
+  '\t\t\tlocal chatEntry = GameChat.gameChat[index]',
+  "\t\t\tif tostring(chatEntry.prefix or '') == originalPrefix and tostring(chatEntry.message or '') == originalMessage then",
+  '\t\t\t\tchatEntry.message = translatedText',
+  '\t\t\t\treplacedCount = replacedCount + 1',
+  '\t\t\tend',
+  '\t\tend',
+  '\t\tif replacedCount > 0 then',
+  '\t\t\tlocal currentLine = GameChat:BuildChatTable(nil)',
+  '\t\t\tGameChat.TransferChatTable(GameChat, currentLine, 0)',
+  '\t\t\tGameChat:UpdateChatScroller()',
+  '\t\tend',
+  "\t\tEcho('HONWHISPERDELIVERED|' .. tostring(replacedCount))",
+  '\tend)',
+  'end',
   ''
+].join('\n')
+
+const WHISPER_RELAY_ANCHOR =
+  "\ttable.insert(GameChat.gameChat,  { messageType = messageType, soundMessageType = messageType, channel = '', prefix = prefix, message = message, sender = sender, entity = '', hosttime = hosttime, playerIndex = '', team = 1, senderName = senderName, userTag = userTag, isBuddy = isBuddy, isMe = isMe} )"
+
+const WHISPER_RELAY_HOOK_BODY = [
+  '\tpcall(function()',
+  '\t\tif ChatTranslatorEncode == nil then return end',
+  '\t\tlocal whisperEntry = GameChat.gameChat[#GameChat.gameChat]',
+  '\t\tif whisperEntry == nil then return end',
+  "\t\tlocal whisperPrefix = tostring(whisperEntry.prefix or '')",
+  "\t\tlocal whisperMessage = tostring(whisperEntry.message or '')",
+  "\t\tif whisperMessage == '' then return end",
+  '\t\tChatWhisperRelayCounter = (ChatWhisperRelayCounter or 0) + 1',
+  "\t\tEcho('HONWHISPERRELAY|' .. tostring(ChatWhisperRelayCounter) .. '|' .. ChatTranslatorEncode(tostring(senderName or '')) .. '|' .. ChatTranslatorEncode(whisperPrefix) .. '|' .. ChatTranslatorEncode(whisperMessage))",
+  '\tend)'
 ].join('\n')
 
 const CHANNEL_DEFINITIONS_ANCHOR = 'function ProcessMessage(prefix, message, sender, allow)'
@@ -292,6 +355,50 @@ const CHANNEL_RELAY_HOOK_BODY = [
   '\tend)'
 ].join('\n')
 
+const SOCIAL_IM_DEFINITIONS_ANCHOR = 'function Social_IM:RefreshCurrentChat()'
+
+const SOCIAL_IM_DEFINITIONS_BODY = [
+  'function SocialImTranslatorDeliver(prefixEncoded, messageEncoded, translatedEncoded)',
+  '\tpcall(function()',
+  '\t\tif ChannelTranslatorDecode == nil then return end',
+  '\t\tlocal originalPrefix = ChannelTranslatorDecode(prefixEncoded)',
+  '\t\tlocal originalMessage = ChannelTranslatorDecode(messageEncoded)',
+  '\t\tlocal translatedText = ChannelTranslatorDecode(translatedEncoded)',
+  "\t\tif translatedText == '' then return end",
+  '\t\tlocal replacedCount = 0',
+  '\t\tfor _, chatHistory in pairs(Social_IM.chatHistories) do',
+  "\t\t\tif type(chatHistory) == 'table' then",
+  '\t\t\t\tfor index = 1, #chatHistory do',
+  '\t\t\t\t\tlocal entry = chatHistory[index]',
+  "\t\t\t\t\tif type(entry) == 'table' and entry.prefix == originalPrefix and entry.message == originalMessage then",
+  '\t\t\t\t\t\tentry.message = translatedText',
+  '\t\t\t\t\t\treplacedCount = replacedCount + 1',
+  '\t\t\t\t\tend',
+  '\t\t\t\tend',
+  '\t\t\tend',
+  '\t\tend',
+  '\t\tif replacedCount > 0 then',
+  '\t\t\tpcall(function() Social_IM:RefreshCurrentChat() end)',
+  '\t\tend',
+  "\t\tEcho('HONIMDELIVERED|' .. tostring(replacedCount))",
+  '\tend)',
+  'end',
+  ''
+].join('\n')
+
+const SOCIAL_IM_RELAY_ANCHOR =
+  '\t\ttable.insert(Social_IM.chatHistories[lName], {prefix = prefix, message = message, sender = sender})'
+
+const SOCIAL_IM_RELAY_HOOK_BODY = [
+  '\t\tpcall(function()',
+  '\t\t\tif ChannelTranslatorEncode == nil then return end',
+  "\t\t\tlocal privateMessage = tostring(message or '')",
+  "\t\t\tif privateMessage == '' then return end",
+  '\t\t\tSocialImRelayCounter = (SocialImRelayCounter or 0) + 1',
+  "\t\t\tEcho('HONIMRELAY|' .. tostring(SocialImRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(name or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(privateMessage))",
+  '\t\tend)'
+].join('\n')
+
 export const chatRelayLuaEdits = [
   {
     targetPath: 'ui/scripts/fe3/communicator.lua',
@@ -314,6 +421,21 @@ export const chatRelayLuaEdits = [
     replace: CHAT_RELAY_ANCHOR + '\n' + CHAT_RELAY_HOOK_BODY
   },
   {
+    targetPath: 'ui/scripts/game/chat.lua',
+    find: WHISPER_RELAY_ANCHOR,
+    replace: WHISPER_RELAY_ANCHOR + '\n' + WHISPER_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_DEFINITIONS_ANCHOR,
+    replace: SOCIAL_IM_DEFINITIONS_BODY + '\n' + SOCIAL_IM_DEFINITIONS_ANCHOR
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_RELAY_ANCHOR,
+    replace: SOCIAL_IM_RELAY_ANCHOR + '\n' + SOCIAL_IM_RELAY_HOOK_BODY
+  },
+  {
     targetPath: 'ui/game_chat.interface',
     find: '<trigger name="MapChatMessage" />',
     replace:
@@ -332,6 +454,10 @@ let translationTargetLanguage: 'en' | 'th' = 'en'
 const RELAY_LINE_PATTERN = /HONCHATRELAY\|(\d+)\|([^|]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
 const CHANNEL_RELAY_LINE_PATTERN =
   /HONCHANRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
+const WHISPER_RELAY_LINE_PATTERN =
+  /HONWHISPERRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
+const PRIVATE_MESSAGE_RELAY_LINE_PATTERN =
+  /HONIMRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
 const THAI_CHARACTER_PATTERN = new RegExp('[\\u0E00-\\u0E7F]')
 const COLOR_CODE_PATTERN = /\^\d{1,3}|\^\*|\^;|\^[A-Za-z]/g
 const OVERLAY_MESSAGE_LIMIT = 6
@@ -344,6 +470,10 @@ let relayWatchdogTimer: NodeJS.Timeout | null = null
 let messageCounter = 0
 let lastRelayCounter = 0
 let lastChannelRelayCounter = 0
+let lastWhisperRelayCounter = 0
+let lastPrivateMessageRelayCounter = 0
+const recentWhisperTimes = new Map<string, number>()
+const recentPrivateMessageTimes = new Map<string, number>()
 let pendingDuplicateText = ''
 let pendingDuplicateCounter = 0
 let pendingDuplicateTime = 0
@@ -526,6 +656,38 @@ function writeChannelTranslationInbox(prefixRaw: string, messageRaw: string, tra
   const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
   queueChannelInboxLine(
     "if ChannelTranslatorDeliver then ChannelTranslatorDeliver('" +
+      prefixEncoded +
+      "', '" +
+      messageEncoded +
+      "', '" +
+      translatedEncoded +
+      "') end"
+  )
+}
+
+function writeWhisperTranslationInbox(prefixRaw: string, messageRaw: string, translatedText: string): void {
+  const markedTranslation = '^458[T]^* ' + translatedText
+  const prefixEncoded = Buffer.from(prefixRaw, 'utf8').toString('base64')
+  const messageEncoded = Buffer.from(messageRaw, 'utf8').toString('base64')
+  const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
+  queueChatInboxLine(
+    "if ChatWhisperTranslatorDeliver then ChatWhisperTranslatorDeliver('" +
+      prefixEncoded +
+      "', '" +
+      messageEncoded +
+      "', '" +
+      translatedEncoded +
+      "') end"
+  )
+}
+
+function writePrivateMessageTranslationInbox(prefixRaw: string, messageRaw: string, translatedText: string): void {
+  const markedTranslation = '^458[T]^* ' + translatedText
+  const prefixEncoded = Buffer.from(prefixRaw, 'utf8').toString('base64')
+  const messageEncoded = Buffer.from(messageRaw, 'utf8').toString('base64')
+  const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
+  queueChannelInboxLine(
+    "if SocialImTranslatorDeliver then SocialImTranslatorDeliver('" +
       prefixEncoded +
       "', '" +
       messageEncoded +
@@ -967,6 +1129,123 @@ function handleChannelRelayLine(line: string): boolean {
   return true
 }
 
+function forgetStaleTimes(seenTimes: Map<string, number>, now: number): void {
+  for (const [key, seenTime] of seenTimes) {
+    if (now - seenTime > DUPLICATE_WINDOW_MILLISECONDS) {
+      seenTimes.delete(key)
+    }
+  }
+}
+
+function handleWhisperRelayLine(line: string): boolean {
+  const match = WHISPER_RELAY_LINE_PATTERN.exec(line)
+  if (!match) {
+    return false
+  }
+  const relayCounter = parseInt(match[1], 10)
+  if (relayCounter === lastWhisperRelayCounter) {
+    return true
+  }
+  lastWhisperRelayCounter = relayCounter
+  const senderName = decodeRelayField(match[2]).replace(COLOR_CODE_PATTERN, '').trim()
+  const prefixRaw = decodeRelayField(match[3])
+  const messageRaw = decodeRelayField(match[4])
+  const messageBody = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  if (messageBody === '') {
+    logLine('translation', 'whisper skipped, the message was empty after removing colour codes, sender ' + senderName)
+    return true
+  }
+  if (!needsTranslation(messageBody)) {
+    logLine('translation', 'whisper skipped, no translation needed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  const now = Date.now()
+  const duplicateKey = prefixRaw + '|' + messageRaw
+  const previousTime = recentWhisperTimes.get(duplicateKey)
+  if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+    logLine('translation', 'whisper duplicate suppressed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  recentWhisperTimes.set(duplicateKey, now)
+  forgetStaleTimes(recentWhisperTimes, now)
+  logLine('translation', 'whisper translating from ' + senderName + ': ' + messageBody.slice(0, 60))
+  translateWithCache(messageBody)
+    .then((translatedText) => {
+      if (!translationActive) {
+        return
+      }
+      if (!translatedText) {
+        logLine('translation', 'whisper not delivered, the translator returned nothing for: ' + messageBody.slice(0, 60))
+        return
+      }
+      logLine('translation', 'whisper translated: ' + messageBody.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
+      writeWhisperTranslationInbox(prefixRaw, messageRaw, translatedText)
+    })
+    .catch((error) => {
+      logLine('translation', 'whisper translation failed for: ' + messageBody.slice(0, 60) + ' error: ' + String(error))
+    })
+  return true
+}
+
+function handlePrivateMessageRelayLine(line: string): boolean {
+  const match = PRIVATE_MESSAGE_RELAY_LINE_PATTERN.exec(line)
+  if (!match) {
+    return false
+  }
+  const relayCounter = parseInt(match[1], 10)
+  if (relayCounter === lastPrivateMessageRelayCounter) {
+    return true
+  }
+  lastPrivateMessageRelayCounter = relayCounter
+  const conversationName = decodeRelayField(match[2]).replace(COLOR_CODE_PATTERN, '').trim()
+  const prefixRaw = decodeRelayField(match[4])
+  const messageRaw = decodeRelayField(match[5])
+  const messageBody = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  if (messageBody === '') {
+    logLine(
+      'translation',
+      'private message skipped, the message was empty after removing colour codes, conversation ' + conversationName
+    )
+    return true
+  }
+  if (!needsTranslation(messageBody)) {
+    logLine('translation', 'private message skipped, no translation needed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  const now = Date.now()
+  const duplicateKey = prefixRaw + '|' + messageRaw
+  const previousTime = recentPrivateMessageTimes.get(duplicateKey)
+  if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+    logLine('translation', 'private message duplicate suppressed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  recentPrivateMessageTimes.set(duplicateKey, now)
+  forgetStaleTimes(recentPrivateMessageTimes, now)
+  logLine('translation', 'private message translating with ' + conversationName + ': ' + messageBody.slice(0, 60))
+  translateWithCache(messageBody)
+    .then((translatedText) => {
+      if (!translationActive) {
+        return
+      }
+      if (!translatedText) {
+        logLine(
+          'translation',
+          'private message not delivered, the translator returned nothing for: ' + messageBody.slice(0, 60)
+        )
+        return
+      }
+      logLine('translation', 'private message translated: ' + messageBody.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
+      writePrivateMessageTranslationInbox(prefixRaw, messageRaw, translatedText)
+    })
+    .catch((error) => {
+      logLine(
+        'translation',
+        'private message translation failed for: ' + messageBody.slice(0, 60) + ' error: ' + String(error)
+      )
+    })
+  return true
+}
+
 function handleDebugOutputLine(_processId: number, line: string): void {
   const applyMatch = /HONCHATSTANDALONEAPPLY\|(\d+)/.exec(line)
   if (applyMatch) {
@@ -981,11 +1260,11 @@ function handleDebugOutputLine(_processId: number, line: string): void {
   if (line.includes('HONCHATSENT|')) {
     dropSentChatInboxEntries()
   }
-  const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0/.exec(line)
+  const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0|HONWHISPERDELIVERED\|0|HONIMDELIVERED\|0/.exec(line)
   if (missedMatch) {
     retryLastDelivery()
   }
-  if (line.includes('HONCHA')) {
+  if (line.includes('HONCHA') || line.includes('HONWHISPER') || line.includes('HONIM')) {
     if (!sawAnyRelayLine) {
       sawAnyRelayLine = true
       logLine('translation', 'first relay line received, the game side is alive')
@@ -993,6 +1272,12 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     logLine('relay', line)
   }
   if (handleChannelRelayLine(line)) {
+    return
+  }
+  if (handleWhisperRelayLine(line)) {
+    return
+  }
+  if (handlePrivateMessageRelayLine(line)) {
     return
   }
   const match = RELAY_LINE_PATTERN.exec(line)
@@ -1073,6 +1358,10 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   }, 90000)
   lastRelayCounter = 0
   lastChannelRelayCounter = 0
+  lastWhisperRelayCounter = 0
+  lastPrivateMessageRelayCounter = 0
+  recentWhisperTimes.clear()
+  recentPrivateMessageTimes.clear()
   chatInboxSequence = Date.now() % 1000000000
   channelInboxSequence = chatInboxSequence
   pendingDuplicateText = ''
