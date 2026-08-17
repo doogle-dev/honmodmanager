@@ -28,6 +28,10 @@ import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogCli
 import { logLine, logsDirectory, translationLogPath } from './managerLogger'
 import type { Catalog } from './catalogClient'
 
+if (!app.isPackaged) {
+  app.setPath('userData', join(app.getPath('appData'), 'hon-reborn-mod-manager-development'))
+}
+
 const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
 const PUBLIC_CATALOG_URLS = [
