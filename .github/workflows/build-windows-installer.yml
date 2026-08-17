@@ -42,6 +42,7 @@ jobs:
           name: hon-reborn-mod-manager-windows-setup
           path: |
             app/dist/*.exe
+            app/dist/*.blockmap
             app/dist/latest.yml
           if-no-files-found: error
       - uses: softprops/action-gh-release@v2
@@ -50,5 +51,6 @@ jobs:
           tag_name: v${{ steps.appversion.outputs.version }}
           files: |
             app/dist/*.exe
+            app/dist/*.blockmap
             app/dist/latest.yml
           fail_on_unmatched_files: true
