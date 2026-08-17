@@ -442,8 +442,12 @@ function retryLastDelivery(): void {
   }, DELIVERY_RETRY_DELAY_MILLISECONDS)
 }
 
-function queueChatInboxLine(luaCall: string): void {
-  lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'chat', luaCall, attempts: 0 }
+function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
+  if (retryWhenMissed) {
+    lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'chat', luaCall, attempts: 0 }
+  } else {
+    lastDelivery = null
+  }
   chatInboxSequence += 1
   inboxWriteTimes.set(chatInboxSequence, Date.now())
   chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
@@ -471,7 +475,30 @@ function writeTranslationInbox(originalRelayText: string, translatedText: string
 
 function writeChatSendInbox(thaiText: string, channelName: 'team' | 'all'): void {
   const textEncoded = Buffer.from(thaiText, 'utf8').toString('base64')
-  queueChatInboxLine("if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "') end")
+  queueChatInboxLine("if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "') end", false)
+}
+
+function dropAppliedInboxEntry(sequence: number): void {
+  const chatBefore = chatInboxEntries.length
+  chatInboxEntries = chatInboxEntries.filter((entry) => entry.sequence !== sequence)
+  if (chatInboxEntries.length !== chatBefore) {
+    rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
+    return
+  }
+  const channelBefore = channelInboxEntries.length
+  channelInboxEntries = channelInboxEntries.filter((entry) => entry.sequence !== sequence)
+  if (channelInboxEntries.length !== channelBefore) {
+    rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
+  }
+}
+
+function dropSentChatInboxEntries(): void {
+  const before = chatInboxEntries.length
+  chatInboxEntries = chatInboxEntries.filter((entry) => !entry.luaCall.includes('ChatTranslatorSend('))
+  if (chatInboxEntries.length !== before) {
+    rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
+    logLine('translation', 'sent chat removed from the inbox so a reload cannot send it again')
+  }
 }
 
 function clearChannelInboxFiles(): void {
@@ -945,6 +972,10 @@ function handleDebugOutputLine(_processId: number, line: string): void {
       inboxWriteTimes.delete(sequence)
       logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeTime) + 'ms')
     }
+    dropAppliedInboxEntry(sequence)
+  }
+  if (line.includes('HONCHATSENT|')) {
+    dropSentChatInboxEntries()
   }
   const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0/.exec(line)
   if (missedMatch) {
