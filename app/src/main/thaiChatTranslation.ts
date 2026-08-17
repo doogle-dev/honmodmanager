@@ -264,12 +264,10 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\tpcall(function() if communicator_lobby_chatbuffer then table.insert(candidateWidgets, communicator_lobby_chatbuffer) end end)',
   '\tpcall(function() if Communicator.chatBuffer then table.insert(candidateWidgets, Communicator.chatBuffer) end end)',
   '\tfor index = 1, #candidateWidgets do',
-  '\t\tif not ChannelTranslatorPollAttached then',
-  '\t\t\tpcall(function()',
-  "\t\t\t\tcandidateWidgets[index]:SetCallback('onframe', pollFunction)",
-  '\t\t\t\tChannelTranslatorPollAttached = true',
-  '\t\t\tend)',
-  '\t\tend',
+  '\t\tpcall(function()',
+  "\t\t\tcandidateWidgets[index]:SetCallback('onframe', pollFunction)",
+  '\t\t\tChannelTranslatorPollAttached = true',
+  '\t\tend)',
   '\tend',
   '\tif ChannelTranslatorPollAttached then',
   "\t\tpcall(function() Echo('HONCHANPOLLATTACHED') end)",
@@ -320,6 +318,12 @@ export const chatRelayLuaEdits = [
     find: '<trigger name="MapChatMessage" />',
     replace:
       '<trigger name="MapChatMessage" />\n\t<panel width="1" height="1" color="invisible" noclick="1" onframelua="if ChatTranslatorPoll then ChatTranslatorPoll() end" />'
+  },
+  {
+    targetPath: 'ui/fe3/main.interface',
+    find: '<include file="/ui/fe3/triggers.package" />',
+    replace:
+      '<include file="/ui/fe3/triggers.package" />\n\t<panel width="1" height="1" color="invisible" noclick="1" onframelua="if ChannelTranslatorPoll then ChannelTranslatorPoll() end" />'
   }
 ]
 
