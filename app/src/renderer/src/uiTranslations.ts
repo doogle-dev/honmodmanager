@@ -113,12 +113,12 @@ const translations: Record<string, { en: string; th: string }> = {
   addFailed: { en: 'Add failed: {error}', th: 'เพิ่มไม่สำเร็จ: {error}' },
   loadFailed: { en: 'Failed to load mods: {error}', th: 'โหลดม็อดไม่สำเร็จ: {error}' },
   catalogOffline: {
-    en: 'Catalog offline. Showing installed mods only.',
-    th: 'แคตตาล็อกออฟไลน์ แสดงเฉพาะม็อดที่ติดตั้งแล้ว'
+    en: 'Catalog offline, showing installed mods only. {detail}',
+    th: 'แคตตาล็อกออฟไลน์ แสดงเฉพาะม็อดที่ติดตั้งแล้ว {detail}'
   },
   catalogCached: {
-    en: 'Catalog offline. Showing the last catalog this app saw, installs will resume when it is back.',
-    th: 'แคตตาล็อกออฟไลน์ กำลังแสดงแคตตาล็อกล่าสุดที่เคยโหลดไว้ การติดตั้งจะกลับมาใช้ได้เมื่อเชื่อมต่อได้อีกครั้ง'
+    en: 'Catalog offline, showing the last catalog this app saw. {detail}',
+    th: 'แคตตาล็อกออฟไลน์ กำลังแสดงแคตตาล็อกล่าสุดที่เคยโหลดไว้ {detail}'
   },
   byAuthor: { en: 'by {author}', th: 'โดย {author}' },
   unknown: { en: 'unknown', th: 'ไม่ทราบ' },
@@ -132,8 +132,8 @@ const translations: Record<string, { en: string; th: string }> = {
     th: 'อัปเดต {version} พร้อมติดตั้งแล้ว กดรีสตาร์ทตอนนี้เพื่อติดตั้ง'
   },
   catalogUnavailable: {
-    en: 'Cannot reach the mod catalog right now. Check your internet connection and try again.',
-    th: 'เชื่อมต่อแคตตาล็อกม็อดไม่ได้ในตอนนี้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'
+    en: 'Cannot reach the mod catalog. {detail} The manager log has the full details.',
+    th: 'เชื่อมต่อแคตตาล็อกม็อดไม่ได้ {detail} ดูรายละเอียดเต็มได้ในล็อกของโปรแกรม'
   },
   updatesUnavailable: { en: 'Updates only work in the installed app.', th: 'อัปเดตใช้ได้เฉพาะแอปที่ติดตั้งแล้ว' },
   updateCheckFailed: { en: 'Update check failed: {error}', th: 'ตรวจสอบอัปเดตไม่สำเร็จ: {error}' },

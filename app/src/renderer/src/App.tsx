@@ -120,6 +120,7 @@ function App(): JSX.Element {
   const [updateMessage, setUpdateMessage] = useState<{ key: string; params?: Record<string, string | number> } | null>(null)
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
+  const [catalogErrorDetail, setCatalogErrorDetail] = useState('')
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
@@ -136,8 +137,9 @@ function App(): JSX.Element {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
       setCatalogUnavailable(Boolean(result.catalogError) && !result.catalogFromCache)
+      setCatalogErrorDetail(result.catalogError)
       if (result.catalogError) {
-        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline'))
+        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline', { detail: result.catalogError }))
       }
     } catch (error) {
       setStatus(t('loadFailed', { error: String(error) }))
@@ -231,8 +233,9 @@ function App(): JSX.Element {
     try {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
+      setCatalogErrorDetail(result.catalogError)
       if (result.catalogError) {
-        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline'))
+        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline', { detail: result.catalogError }))
         return
       }
       const updateCount = result.mods.filter((mod) => mod.updateAvailable).length
@@ -664,7 +667,7 @@ function App(): JSX.Element {
               <div className="min-w-0 flex-1 overflow-y-auto">
                 {filteredBrowseMods.length === 0 ? (
                   <p className="px-8 py-5 text-sm text-slate-500">
-                    {catalogUnavailable ? t('catalogUnavailable') : t('noModsMatch')}
+                    {catalogUnavailable ? t('catalogUnavailable', { detail: catalogErrorDetail }) : t('noModsMatch')}
                   </p>
                 ) : (
                   filteredBrowseMods.map((mod) => renderModListRow(mod, mod.fileName === selectedBrowseMod?.fileName))

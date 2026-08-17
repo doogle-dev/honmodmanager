@@ -88,8 +88,8 @@ async function loadCatalogWithFallback(): Promise<{ catalog: Catalog | null; cat
     rememberCatalog(fetched)
     return { catalog: fetched.catalog, catalogError: '', catalogFromCache: false }
   } catch (error) {
-    const catalogError = String(error)
-    logLine('error', 'catalog fetch failed on every host: ' + catalogError)
+    const catalogError = error instanceof Error ? error.message : String(error)
+    logLine('error', 'catalog unavailable on every host: ' + catalogError)
     const cached = recallCatalog()
     if (cached) {
       activeCatalogBaseUrl = cached.baseUrl
@@ -790,7 +790,8 @@ function runShortcutLaunch(launchFlag: 'modded' | 'vanilla', quitWhenGameExits: 
         })
       }
     }
-  } catch {
+  } catch (error) {
+    logLine('error', 'launch failed: ' + String(error))
     if (quitWhenGameExits) {
       app.quit()
     }
