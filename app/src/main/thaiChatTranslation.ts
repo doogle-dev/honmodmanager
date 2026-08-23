@@ -827,22 +827,120 @@ function needsTranslation(messageText: string): boolean {
   return LATIN_WORD_PATTERN.test(messageText) && !THAI_CHARACTER_PATTERN.test(messageText)
 }
 
-async function translateText(messageText: string, targetLanguage: string): Promise<string> {
-  const requestUrl =
-    'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
-    targetLanguage +
-    '&dt=t&q=' +
-    encodeURIComponent(messageText)
-  const response = await fetch(requestUrl)
+const TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS = 10000
+const TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS = 5 * 60 * 1000
+
+type TranslationProvider = {
+  name: string
+  blockedUntil: number
+  translate: (messageText: string, targetLanguage: string) => Promise<string>
+}
+
+async function fetchTranslationJson(requestUrl: string): Promise<unknown> {
+  const response = await fetch(requestUrl, { signal: AbortSignal.timeout(TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS) })
   if (!response.ok) {
-    throw new Error('Translation request failed with status ' + response.status)
+    throw new Error('HTTP ' + response.status)
   }
-  const payload = (await response.json()) as unknown[]
-  const segments = Array.isArray(payload) && Array.isArray(payload[0]) ? (payload[0] as unknown[][]) : []
-  return segments
-    .map((segment) => (Array.isArray(segment) ? String(segment[0] ?? '') : ''))
-    .join('')
-    .trim()
+  return await response.json()
+}
+
+function sourceLanguageFor(targetLanguage: string): string {
+  return targetLanguage === 'th' ? 'en' : 'th'
+}
+
+const translationProviders: TranslationProvider[] = [
+  {
+    name: 'translate.googleapis.com',
+    blockedUntil: 0,
+    translate: async (messageText, targetLanguage) => {
+      const payload = (await fetchTranslationJson(
+        'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
+          targetLanguage +
+          '&dt=t&q=' +
+          encodeURIComponent(messageText)
+      )) as unknown[]
+      const segments = Array.isArray(payload) && Array.isArray(payload[0]) ? (payload[0] as unknown[][]) : []
+      return segments
+        .map((segment) => (Array.isArray(segment) ? String(segment[0] ?? '') : ''))
+        .join('')
+        .trim()
+    }
+  },
+  {
+    name: 'clients5.google.com',
+    blockedUntil: 0,
+    translate: async (messageText, targetLanguage) => {
+      const payload = (await fetchTranslationJson(
+        'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=' +
+          targetLanguage +
+          '&q=' +
+          encodeURIComponent(messageText)
+      )) as unknown
+      if (!Array.isArray(payload)) {
+        throw new Error('unexpected response shape')
+      }
+      return payload
+        .map((entry) => (Array.isArray(entry) ? String(entry[0] ?? '') : String(entry ?? '')))
+        .join(' ')
+        .trim()
+    }
+  },
+  {
+    name: 'api.mymemory.translated.net',
+    blockedUntil: 0,
+    translate: async (messageText, targetLanguage) => {
+      const payload = (await fetchTranslationJson(
+        'https://api.mymemory.translated.net/get?q=' +
+          encodeURIComponent(messageText) +
+          '&langpair=' +
+          sourceLanguageFor(targetLanguage) +
+          '|' +
+          targetLanguage
+      )) as { responseStatus?: number; responseDetails?: string; responseData?: { translatedText?: string } }
+      if (payload.responseStatus !== 200) {
+        throw new Error('service status ' + payload.responseStatus + ' ' + (payload.responseDetails ?? ''))
+      }
+      return String(payload.responseData?.translatedText ?? '').trim()
+    }
+  }
+]
+
+function describeTranslationFailure(error: unknown): string {
+  const errorObject = error as { name?: string; message?: string; cause?: { code?: string; message?: string } }
+  if (errorObject && errorObject.name === 'TimeoutError') {
+    return 'no response after ' + Math.round(TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS / 1000) + ' seconds'
+  }
+  if (errorObject && errorObject.cause && (errorObject.cause.code || errorObject.cause.message)) {
+    return String(errorObject.cause.code || errorObject.cause.message)
+  }
+  return errorObject && errorObject.message ? errorObject.message : String(error)
+}
+
+async function translateText(messageText: string, targetLanguage: string): Promise<string> {
+  const failures: string[] = []
+  const now = Date.now()
+  for (const provider of translationProviders) {
+    if (provider.blockedUntil > now) {
+      failures.push(provider.name + ': cooling down for ' + Math.ceil((provider.blockedUntil - now) / 1000) + 's after a rate limit')
+      continue
+    }
+    const startedAt = Date.now()
+    try {
+      const translatedText = await provider.translate(messageText, targetLanguage)
+      logLine('translation', 'translated via ' + provider.name + ' in ' + (Date.now() - startedAt) + 'ms')
+      return translatedText
+    } catch (error) {
+      const reason = describeTranslationFailure(error)
+      if (reason === 'HTTP 429') {
+        provider.blockedUntil = Date.now() + TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS
+        logLine('translation', 'provider ' + provider.name + ' rate limited this machine, HTTP 429 after ' + (Date.now() - startedAt) + 'ms, skipping it for ' + Math.round(TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS / 60000) + ' minutes')
+      } else {
+        logLine('translation', 'provider ' + provider.name + ' failed, ' + reason + ', after ' + (Date.now() - startedAt) + 'ms')
+      }
+      failures.push(provider.name + ': ' + reason)
+    }
+  }
+  throw new Error('every translation provider failed, ' + failures.join(', '))
 }
 
 async function translateToEnglish(messageText: string): Promise<string> {
