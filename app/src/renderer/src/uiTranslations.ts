@@ -138,7 +138,74 @@ const translations: Record<string, { en: string; th: string }> = {
   updatesUnavailable: { en: 'Updates only work in the installed app.', th: 'อัปเดตใช้ได้เฉพาะแอปที่ติดตั้งแล้ว' },
   updateCheckFailed: { en: 'Update check failed: {error}', th: 'ตรวจสอบอัปเดตไม่สำเร็จ: {error}' },
   updateDownloadFailed: { en: 'Update download failed: {error}', th: 'ดาวน์โหลดอัปเดตไม่สำเร็จ: {error}' },
-  downloadCancelled: { en: 'Download cancelled.', th: 'ยกเลิกการดาวน์โหลดแล้ว' }
+  downloadCancelled: { en: 'Download cancelled.', th: 'ยกเลิกการดาวน์โหลดแล้ว' },
+
+  healthHeading: { en: 'Health', th: 'สถานะการทำงาน' },
+  healthStatusOff: { en: 'Off', th: 'ปิดอยู่' },
+  healthStatusIdle: { en: 'Idle', th: 'รออยู่' },
+  healthStatusWaiting: { en: 'Starting', th: 'กำลังเริ่ม' },
+  healthStatusListening: { en: 'Connected', th: 'เชื่อมต่อแล้ว' },
+  healthStatusHealthy: { en: 'Working', th: 'ทำงานปกติ' },
+  healthStatusDegraded: { en: 'Struggling', th: 'ทำงานได้ไม่เต็มที่' },
+  healthStatusFailing: { en: 'Not working', th: 'ใช้งานไม่ได้' },
+  healthOffDetail: {
+    en: 'Chat translation is turned off.',
+    th: 'การแปลแชทถูกปิดอยู่'
+  },
+  healthIdleDetail: {
+    en: 'Ready. Translation starts when you launch the game from the manager.',
+    th: 'พร้อมแล้ว การแปลจะเริ่มเมื่อคุณเปิดเกมจากตัวจัดการม็อด'
+  },
+  healthWaitingDetail: {
+    en: 'Waiting for the game to say hello.',
+    th: 'กำลังรอสัญญาณจากเกม'
+  },
+  healthNoChatYetDetail: {
+    en: 'Connected to the game and watching chat. Nothing has needed translating yet.',
+    th: 'เชื่อมต่อกับเกมและกำลังเฝ้าดูแชทอยู่ ยังไม่มีข้อความที่ต้องแปล'
+  },
+  healthHealthyDetail: {
+    en: 'Translating normally, {count} message(s) this session.',
+    th: 'แปลได้ตามปกติ {count} ข้อความในรอบนี้'
+  },
+  healthHealthyRestingDetail: {
+    en: 'Translating normally, {count} message(s) this session. Using a backup service while {providers} rests after a rate limit.',
+    th: 'แปลได้ตามปกติ {count} ข้อความในรอบนี้ กำลังใช้บริการสำรองระหว่างที่ {providers} พักหลังถูกจำกัดจำนวนคำขอ'
+  },
+  healthNoRelayDetail: {
+    en: 'The game is not sending chat to the manager. Launch the game from the manager with chat translation already enabled.',
+    th: 'เกมไม่ได้ส่งแชทมาที่ตัวจัดการม็อด ให้เปิดเกมจากตัวจัดการม็อดโดยเปิดการแปลแชทไว้ก่อน'
+  },
+  healthProvidersDownDetail: {
+    en: 'Every translation service is refusing requests. Last reason: {reason}',
+    th: 'บริการแปลทุกตัวปฏิเสธคำขอ เหตุผลล่าสุด: {reason}'
+  },
+  healthNotReachingGameDetail: {
+    en: 'Translations are being made but the game is not picking them up.',
+    th: 'แปลข้อความได้แล้ว แต่เกมไม่ได้รับไปแสดง'
+  },
+  healthRecentFailureDetail: {
+    en: 'A translation just failed: {reason}',
+    th: 'เพิ่งแปลไม่สำเร็จ: {reason}'
+  },
+  healthAllProvidersCoolingDetail: {
+    en: 'Every translation service is resting after a rate limit. This clears itself within a few minutes.',
+    th: 'บริการแปลทุกตัวกำลังพักหลังถูกจำกัดจำนวนคำขอ ระบบจะกลับมาเองภายในไม่กี่นาที'
+  },
+  healthCounts: {
+    en: '{translated} translated, {failed} failed',
+    th: 'แปลสำเร็จ {translated} ล้มเหลว {failed}'
+  },
+  healthNeedsAttention: {
+    en: 'Chat translation needs attention',
+    th: 'การแปลแชทมีปัญหา'
+  },
+
+  liveLogHeading: { en: 'Live log', th: 'บันทึกสด' },
+  hideLog: { en: 'Hide Log', th: 'ซ่อนบันทึก' },
+  openLogFile: { en: 'Open File', th: 'เปิดไฟล์' },
+  logEmpty: { en: 'Nothing logged yet.', th: 'ยังไม่มีบันทึก' },
+  followLog: { en: 'Follow', th: 'ตามอัตโนมัติ' }
 }
 
 export function createTranslator(language: UiLanguage): (key: string, params?: Record<string, string | number>) => string {

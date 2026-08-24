@@ -7,6 +7,21 @@ interface UpdateProgress {
   bytesPerSecond: number
 }
 
+interface TranslationHealth {
+  status: string
+  detailKey: string
+  detailParams: Record<string, string | number>
+  sessionActive: boolean
+  relaySeen: boolean
+  translatedCount: number
+  failedCount: number
+  consecutiveFailures: number
+  lastFailureReason: string
+  lastSuccessAt: number
+  lastFailureAt: number
+  coolingDownProviders: string[]
+}
+
 interface ChatTranslationMessage {
   id: number
   messageType: string
@@ -60,6 +75,16 @@ const modManagerApi = {
   openTranslationCacheFolder: () => ipcRenderer.invoke('chatTranslation:openCacheFolder'),
   openLogsFolder: () => ipcRenderer.invoke('logs:open'),
   openTranslationLog: () => ipcRenderer.invoke('logs:openTranslation'),
+  startLogTail: (logName: string): Promise<{ lines: string[]; filePath: string }> =>
+    ipcRenderer.invoke('logs:tailStart', logName),
+  stopLogTail: () => ipcRenderer.invoke('logs:tailStop'),
+  onLogTailAppend: (listener: (lines: string[]) => void) => {
+    ipcRenderer.on('logs:tailAppend', (_event, lines: string[]) => listener(lines))
+  },
+  getTranslationHealth: (): Promise<TranslationHealth> => ipcRenderer.invoke('chatTranslation:health'),
+  onTranslationHealth: (listener: (health: TranslationHealth) => void) => {
+    ipcRenderer.on('chatTranslation:health', (_event, health: TranslationHealth) => listener(health))
+  },
   onChatComposeShown: (listener: () => void) => {
     ipcRenderer.on('chatCompose:shown', () => listener())
   }
