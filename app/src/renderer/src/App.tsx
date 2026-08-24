@@ -179,6 +179,7 @@ function App(): JSX.Element {
   const [checkingForUpdates, setCheckingForUpdates] = useState(false)
   const [catalogUnavailable, setCatalogUnavailable] = useState(false)
   const [catalogErrorDetail, setCatalogErrorDetail] = useState('')
+  const [catalogFromCache, setCatalogFromCache] = useState(false)
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
@@ -201,9 +202,7 @@ function App(): JSX.Element {
       setMods(result.mods)
       setCatalogUnavailable(Boolean(result.catalogError) && !result.catalogFromCache)
       setCatalogErrorDetail(result.catalogError)
-      if (result.catalogError) {
-        setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline', { detail: result.catalogError }))
-      }
+      setCatalogFromCache(Boolean(result.catalogError) && result.catalogFromCache)
     } catch (error) {
       setStatus(t('loadFailed', { error: String(error) }))
     }
@@ -325,7 +324,9 @@ function App(): JSX.Element {
     try {
       const result = await window.modManager.listCatalog()
       setMods(result.mods)
+      setCatalogUnavailable(Boolean(result.catalogError) && !result.catalogFromCache)
       setCatalogErrorDetail(result.catalogError)
+      setCatalogFromCache(Boolean(result.catalogError) && result.catalogFromCache)
       if (result.catalogError) {
         setStatus(t(result.catalogFromCache ? 'catalogCached' : 'catalogOffline', { detail: result.catalogError }))
         return
@@ -438,6 +439,9 @@ function App(): JSX.Element {
   const detailPanelVisible = page === 'browse' || page === 'installed'
   const detailModFileName = (page === 'browse' ? selectedBrowseMod : selectedInstalledMod)?.fileName ?? ''
   const translationNeedsAttention = healthNeedsAttention(translationHealth)
+  const catalogMessage = catalogErrorDetail
+    ? t(catalogFromCache ? 'catalogCached' : 'catalogOffline', { detail: catalogErrorDetail })
+    : ''
 
   // The log belongs to the translation mod, so stop tailing as soon as the reader looks elsewhere.
   useEffect(() => {
@@ -1065,7 +1069,7 @@ function App(): JSX.Element {
       </div>
 
       <footer className="flex items-center justify-between gap-4 border-t border-white/10 px-8 py-2" style={{ backgroundColor: CHROME_BACKGROUND }}>
-        <span className="block h-4 min-w-0 flex-1 truncate text-xs text-white">{status}</span>
+        <span className="block h-4 min-w-0 flex-1 truncate text-xs text-white">{status || catalogMessage}</span>
         {translationNeedsAttention && (
           <button
             onClick={showTranslationMod}
