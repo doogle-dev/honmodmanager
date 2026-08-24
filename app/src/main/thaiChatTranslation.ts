@@ -548,14 +548,14 @@ function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: 
   writeFileSync(inboxPath, fileLines.join('\n') + '\n')
 }
 
-const inboxWriteTimes = new Map<number, number>()
+const inboxWriteTimes = new Map<number, { time: number; kind: 'chat' | 'channel' }>()
 
 // Entries the game never confirms would otherwise pile up for the whole session, and only the
 // recent ones say anything about whether delivery is working right now.
 function pruneUnconfirmedDeliveries(): void {
   const now = Date.now()
-  for (const [sequence, writeTime] of inboxWriteTimes) {
-    if (now - writeTime > INBOX_ENTRY_LIFETIME_MILLISECONDS) {
+  for (const [sequence, writeRecord] of inboxWriteTimes) {
+    if (now - writeRecord.time > INBOX_ENTRY_LIFETIME_MILLISECONDS) {
       inboxWriteTimes.delete(sequence)
     }
   }
@@ -563,16 +563,44 @@ function pruneUnconfirmedDeliveries(): void {
 
 const DELIVERY_RETRY_LIMIT = 2
 const DELIVERY_RETRY_DELAY_MILLISECONDS = 2500
-let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number } | null = null
+const DELIVERY_RETRY_MAX_AGE_MILLISECONDS = 30000
+let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number; queuedAt: number } | null = null
+
+function dropDeliveryInboxEntries(luaCall: string): void {
+  const chatCountBefore = chatInboxEntries.length
+  chatInboxEntries = chatInboxEntries.filter((entry) => entry.luaCall !== luaCall)
+  if (chatInboxEntries.length !== chatCountBefore) {
+    rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
+  }
+  const channelCountBefore = channelInboxEntries.length
+  channelInboxEntries = channelInboxEntries.filter((entry) => entry.luaCall !== luaCall)
+  if (channelInboxEntries.length !== channelCountBefore) {
+    rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
+  }
+}
 
 function retryLastDelivery(): void {
   const pending = lastDelivery
-  if (!pending || pending.attempts >= DELIVERY_RETRY_LIMIT) {
-    if (pending) {
-      logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
-      lastDelivery = null
-      noteDeliveryMissed()
-    }
+  if (!pending) {
+    return
+  }
+  const pendingAge = Date.now() - pending.queuedAt
+  if (pendingAge > DELIVERY_RETRY_MAX_AGE_MILLISECONDS) {
+    logLine(
+      'translation',
+      'the chat line to replace was queued ' +
+        Math.round(pendingAge / 1000) +
+        's ago in an earlier game phase and its chat history is gone, dropping it without retry'
+    )
+    lastDelivery = null
+    dropDeliveryInboxEntries(pending.luaCall)
+    return
+  }
+  if (pending.attempts >= DELIVERY_RETRY_LIMIT) {
+    logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
+    lastDelivery = null
+    dropDeliveryInboxEntries(pending.luaCall)
+    noteDeliveryMissed()
     return
   }
   pending.attempts += 1
@@ -591,13 +619,16 @@ function retryLastDelivery(): void {
 
 function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
   if (retryWhenMissed) {
-    lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'chat', luaCall, attempts: 0 }
+    lastDelivery =
+      lastDelivery && lastDelivery.luaCall === luaCall
+        ? lastDelivery
+        : { kind: 'chat', luaCall, attempts: 0, queuedAt: Date.now() }
   } else {
     lastDelivery = null
   }
   pruneUnconfirmedDeliveries()
   chatInboxSequence += 1
-  inboxWriteTimes.set(chatInboxSequence, Date.now())
+  inboxWriteTimes.set(chatInboxSequence, { time: Date.now(), kind: 'chat' })
   chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
   chatInboxEntries = pruneInboxEntries(chatInboxEntries)
   rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
@@ -605,10 +636,13 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
 }
 
 function queueChannelInboxLine(luaCall: string): void {
-  lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'channel', luaCall, attempts: 0 }
+  lastDelivery =
+    lastDelivery && lastDelivery.luaCall === luaCall
+      ? lastDelivery
+      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now() }
   pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
-  inboxWriteTimes.set(channelInboxSequence, Date.now())
+  inboxWriteTimes.set(channelInboxSequence, { time: Date.now(), kind: 'channel' })
   channelInboxEntries.push({ sequence: channelInboxSequence, luaCall, time: Date.now() })
   channelInboxEntries = pruneInboxEntries(channelInboxEntries)
   rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
@@ -878,9 +912,12 @@ function coolingDownProviderNames(): string[] {
 
 function oldestUnconfirmedDeliveryAt(): number {
   let oldest = 0
-  for (const writeTime of inboxWriteTimes.values()) {
-    if (oldest === 0 || writeTime < oldest) {
-      oldest = writeTime
+  for (const writeRecord of inboxWriteTimes.values()) {
+    if (writeRecord.kind !== 'chat') {
+      continue
+    }
+    if (oldest === 0 || writeRecord.time < oldest) {
+      oldest = writeRecord.time
     }
   }
   return oldest
@@ -1574,10 +1611,10 @@ function handleDebugOutputLine(_processId: number, line: string): void {
   const applyMatch = /HONCHATSTANDALONEAPPLY\|(\d+)/.exec(line)
   if (applyMatch) {
     const sequence = parseInt(applyMatch[1], 10)
-    const writeTime = inboxWriteTimes.get(sequence)
-    if (writeTime !== undefined) {
+    const writeRecord = inboxWriteTimes.get(sequence)
+    if (writeRecord !== undefined) {
       inboxWriteTimes.delete(sequence)
-      logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeTime) + 'ms')
+      logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeRecord.time) + 'ms')
       noteDeliveryConfirmed()
     }
     dropAppliedInboxEntry(sequence)
