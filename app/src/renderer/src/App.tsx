@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   HardDrive,
@@ -12,7 +12,8 @@ import {
   Puzzle,
   RefreshCw,
   FileText,
-  Github
+  Github,
+  AlertTriangle
 } from 'lucide-react'
 import { createTranslator, loadUiLanguage, saveUiLanguage, UiLanguage } from './uiTranslations'
 
@@ -20,6 +21,63 @@ type PageKey = 'browse' | 'installed' | 'settings' | 'credits'
 
 const TRANSLATION_FEATURE_FILE_NAME = 'ChatTranslation.feature'
 const CACHE_LIMIT_BYTES = 20 * 1024 * 1024
+
+const LOG_LINE_LIMIT = 600
+const LOG_FAILURE_PATTERN = /failed|error|rate limited|giving up|not found|no relay lines|unavailable|cannot/i
+const LOG_SUCCESS_PATTERN = /translated via|translated:|game applied|is alive/i
+
+const HEALTH_COLOURS: Record<TranslationHealthStatus, string> = {
+  off: '#6b7280',
+  idle: '#8b93a1',
+  waiting: '#d6a44a',
+  listening: '#4fa85a',
+  healthy: '#4fa85a',
+  degraded: '#d6a44a',
+  failing: '#d65a5a'
+}
+
+const HEALTH_STATUS_KEYS: Record<TranslationHealthStatus, string> = {
+  off: 'healthStatusOff',
+  idle: 'healthStatusIdle',
+  waiting: 'healthStatusWaiting',
+  listening: 'healthStatusListening',
+  healthy: 'healthStatusHealthy',
+  degraded: 'healthStatusDegraded',
+  failing: 'healthStatusFailing'
+}
+
+function healthNeedsAttention(health: TranslationHealth | null): boolean {
+  return health !== null && health.status === 'failing'
+}
+
+function HealthDot({ status, size }: { status: TranslationHealthStatus; size: string }): JSX.Element {
+  return (
+    <span
+      className={size + ' shrink-0 rounded-full ' + (status === 'failing' ? 'animate-pulse' : '')}
+      style={{ backgroundColor: HEALTH_COLOURS[status] }}
+    />
+  )
+}
+
+type ParsedLogLine = { time: string; area: string; message: string }
+
+function parseLogLine(line: string): ParsedLogLine {
+  const match = /^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^ ]* \[([^\]]+)\] (.*)$/.exec(line)
+  if (!match) {
+    return { time: '', area: '', message: line }
+  }
+  return { time: match[1], area: match[2], message: match[3] }
+}
+
+function logLineColour(message: string): string {
+  if (LOG_FAILURE_PATTERN.test(message)) {
+    return '#e08a8a'
+  }
+  if (LOG_SUCCESS_PATTERN.test(message)) {
+    return '#8fd39a'
+  }
+  return '#b6bdc7'
+}
 
 const ACCENT = '#3b6ea5'
 const ACCENT_TEXT = '#ffffff'
@@ -124,6 +182,11 @@ function App(): JSX.Element {
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
+  const [translationHealth, setTranslationHealth] = useState<TranslationHealth | null>(null)
+  const [logViewOpen, setLogViewOpen] = useState(false)
+  const [logLines, setLogLines] = useState<string[]>([])
+  const [followLog, setFollowLog] = useState(true)
+  const logScrollRef = useRef<HTMLDivElement | null>(null)
   const t = createTranslator(uiLanguage)
 
   function changeUiLanguage(language: UiLanguage): void {
@@ -174,10 +237,39 @@ function App(): JSX.Element {
     })
     window.modManager.getTranslationCacheInfo().then(setCacheInfo)
     window.modManager.setChatTranslationLanguage(loadUiLanguage())
+    window.modManager.getTranslationHealth().then(setTranslationHealth)
+    window.modManager.onTranslationHealth(setTranslationHealth)
+    window.modManager.onLogTailAppend((lines) => {
+      setLogLines((current) => current.concat(lines).slice(-LOG_LINE_LIMIT))
+    })
     return () => {
       window.removeEventListener('focus', refreshOnFocus)
+      window.modManager.stopLogTail()
     }
   }, [])
+
+  async function openTranslationLogView(): Promise<void> {
+    const started = await window.modManager.startLogTail('translation')
+    setLogLines(started.lines)
+    setFollowLog(true)
+    setLogViewOpen(true)
+  }
+
+  function closeTranslationLogView(): void {
+    window.modManager.stopLogTail()
+    setLogViewOpen(false)
+    setLogLines([])
+  }
+
+  useEffect(() => {
+    if (!logViewOpen || !followLog) {
+      return
+    }
+    const scroller = logScrollRef.current
+    if (scroller) {
+      scroller.scrollTop = scroller.scrollHeight
+    }
+  }, [logLines, logViewOpen, followLog])
 
   async function refreshCacheInfo(): Promise<void> {
     setCacheInfo(await window.modManager.getTranslationCacheInfo())
@@ -343,6 +435,84 @@ function App(): JSX.Element {
   const selectedInstalledMod =
     installedMods.find((mod) => mod.fileName === selectedModFileName) ?? installedMods[0] ?? null
   const pendingUpdateCount = mods.filter((mod) => mod.installed && mod.updateAvailable).length
+  const detailPanelVisible = page === 'browse' || page === 'installed'
+  const detailModFileName = (page === 'browse' ? selectedBrowseMod : selectedInstalledMod)?.fileName ?? ''
+  const translationNeedsAttention = healthNeedsAttention(translationHealth)
+
+  // The log belongs to the translation mod, so stop tailing as soon as the reader looks elsewhere.
+  useEffect(() => {
+    if (logViewOpen && (!detailPanelVisible || detailModFileName !== TRANSLATION_FEATURE_FILE_NAME)) {
+      closeTranslationLogView()
+    }
+  }, [detailPanelVisible, detailModFileName, logViewOpen])
+
+  function showTranslationMod(): void {
+    setSelectedModFileName(TRANSLATION_FEATURE_FILE_NAME)
+    setPage('installed')
+  }
+
+  function renderHealthSummary(health: TranslationHealth): JSX.Element {
+    return (
+      <div className="border-b border-white/10 px-4 py-3">
+        <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('healthHeading')}</h4>
+        <div className="flex items-center gap-2">
+          <HealthDot status={health.status} size="h-2.5 w-2.5" />
+          <span className="text-[13px] font-semibold" style={{ color: HEALTH_COLOURS[health.status] }}>
+            {t(HEALTH_STATUS_KEYS[health.status])}
+          </span>
+          {(health.translatedCount > 0 || health.failedCount > 0) && (
+            <span className="ml-auto text-[11px] text-slate-500">
+              {t('healthCounts', { translated: health.translatedCount, failed: health.failedCount })}
+            </span>
+          )}
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{t(health.detailKey, health.detailParams)}</p>
+      </div>
+    )
+  }
+
+  function renderTranslationLogView(): JSX.Element {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('liveLogHeading')}</h4>
+          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-400">
+            <input
+              type="checkbox"
+              checked={followLog}
+              onChange={(event) => setFollowLog(event.target.checked)}
+              className="h-3 w-3 accent-[#3b6ea5]"
+            />
+            {t('followLog')}
+          </label>
+          <button
+            onClick={() => window.modManager.openTranslationLog()}
+            className="rounded border border-white/15 px-2 py-0.5 text-[11px] text-slate-300 hover:bg-white/10"
+          >
+            {t('openLogFile')}
+          </button>
+        </div>
+        <div ref={logScrollRef} className="min-h-0 flex-1 overflow-auto bg-black/25 px-3 py-2">
+          {logLines.length === 0 ? (
+            <p className="text-xs text-slate-500">{t('logEmpty')}</p>
+          ) : (
+            logLines.map((line, lineIndex) => {
+              const parsed = parseLogLine(line)
+              return (
+                <div key={lineIndex} className="flex gap-2 font-mono text-[11px] leading-[1.5]">
+                  {parsed.time && <span className="shrink-0 text-slate-600">{parsed.time}</span>}
+                  {parsed.area && <span className="shrink-0 text-slate-500">{parsed.area}</span>}
+                  <span className="min-w-0 whitespace-pre-wrap break-words" style={{ color: logLineColour(parsed.message) }}>
+                    {parsed.message}
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    )
+  }
 
   function renderAbilityKeyChips(mod: CatalogMod): JSX.Element | null {
     if (!mod.abilityKey) {
@@ -375,6 +545,17 @@ function App(): JSX.Element {
               <span className="flex shrink-0 items-center gap-1 self-center">
                 <ThaiFlag />
                 <EnglishFlag />
+              </span>
+            )}
+            {mod.fileName === TRANSLATION_FEATURE_FILE_NAME && mod.installed && translationHealth && (
+              <span
+                className="flex shrink-0 items-center gap-1 self-center"
+                title={t(translationHealth.detailKey, translationHealth.detailParams)}
+              >
+                <HealthDot status={translationHealth.status} size="h-2 w-2" />
+                <span className="text-[11px]" style={{ color: HEALTH_COLOURS[translationHealth.status] }}>
+                  {t(HEALTH_STATUS_KEYS[translationHealth.status])}
+                </span>
               </span>
             )}
             {renderAbilityKeyChips(mod)}
@@ -419,6 +600,8 @@ function App(): JSX.Element {
     if (!mod) {
       return <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500">{t('selectMod')}</div>
     }
+    const isTranslationMod = mod.fileName === TRANSLATION_FEATURE_FILE_NAME
+    const showLogView = logViewOpen && isTranslationMod
     const infoRows: [string, string][] = [
       [t('infoVersion'), mod.version ? 'v' + mod.version : t('unknown')],
       [t('infoAuthor'), mod.author || t('unknown')],
@@ -448,6 +631,10 @@ function App(): JSX.Element {
           )}
           {renderAbilityKeyChips(mod)}
         </div>
+        {isTranslationMod && mod.installed && translationHealth && renderHealthSummary(translationHealth)}
+        {showLogView ? (
+          renderTranslationLogView()
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="px-4 py-3">
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t('modInfoHeading')}</h4>
@@ -468,6 +655,7 @@ function App(): JSX.Element {
             )}
           </div>
         </div>
+        )}
         <div className="flex items-center gap-2 border-t border-white/10 px-4 py-3">
           {!mod.installed && (
             <button
@@ -487,13 +675,16 @@ function App(): JSX.Element {
               {mod.enabled ? t('enabled') : t('disabled')}
             </button>
           )}
-          {mod.installed && mod.fileName === TRANSLATION_FEATURE_FILE_NAME && (
+          {mod.installed && isTranslationMod && (
             <button
-              onClick={() => window.modManager.openTranslationLog()}
-              className="flex items-center gap-1.5 rounded border border-white/25 px-4 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
+              onClick={() => (showLogView ? closeTranslationLogView() : openTranslationLogView())}
+              className={
+                'flex items-center gap-1.5 rounded border px-4 py-1.5 text-[13px] font-normal ' +
+                (showLogView ? 'border-white/40 bg-white/10 text-white' : 'border-white/25 text-slate-300 hover:bg-white/10')
+              }
             >
               <FileText className="h-3.5 w-3.5" />
-              {t('viewLog')}
+              {showLogView ? t('hideLog') : t('viewLog')}
             </button>
           )}
           {mod.installed && (
@@ -510,7 +701,7 @@ function App(): JSX.Element {
     )
   }
 
-  function renderNavItem(key: PageKey, label: string, icon: JSX.Element): JSX.Element {
+  function renderNavItem(key: PageKey, label: string, icon: JSX.Element, showAlertDot: boolean = false): JSX.Element {
     const isActive = page === key
     return (
       <button
@@ -519,6 +710,12 @@ function App(): JSX.Element {
       >
         {icon}
         {label}
+        {showAlertDot && (
+          <span
+            className="ml-auto h-2 w-2 animate-pulse rounded-full"
+            style={{ backgroundColor: HEALTH_COLOURS.failing }}
+          />
+        )}
       </button>
     )
   }
@@ -547,7 +744,7 @@ function App(): JSX.Element {
 
         <nav className="flex flex-col gap-1">
           {renderNavItem('browse', t('browseModsNav'), <Library className="h-5 w-5" />)}
-          {renderNavItem('installed', t('installedModsNav'), <HardDrive className="h-5 w-5" />)}
+          {renderNavItem('installed', t('installedModsNav'), <HardDrive className="h-5 w-5" />, translationNeedsAttention)}
           {renderNavItem('settings', t('settings'), <Settings className="h-5 w-5" />)}
           {renderNavItem('credits', t('credits'), <Info className="h-5 w-5" />)}
         </nav>
@@ -868,7 +1065,17 @@ function App(): JSX.Element {
       </div>
 
       <footer className="flex items-center justify-between gap-4 border-t border-white/10 px-8 py-2" style={{ backgroundColor: CHROME_BACKGROUND }}>
-        <span className="block h-4 min-w-0 truncate text-xs text-white">{status}</span>
+        <span className="block h-4 min-w-0 flex-1 truncate text-xs text-white">{status}</span>
+        {translationNeedsAttention && (
+          <button
+            onClick={showTranslationMod}
+            title={translationHealth ? t(translationHealth.detailKey, translationHealth.detailParams) : ''}
+            className="flex shrink-0 items-center gap-1.5 rounded border border-[#c96a6a]/50 bg-[#c96a6a]/15 px-2.5 py-1 text-xs text-[#e08a8a] hover:bg-[#c96a6a]/25"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {t('healthNeedsAttention')}
+          </button>
+        )}
         {updateReadyVersion && (
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-slate-400">{t('updateReady', { version: updateReadyVersion })}</span>

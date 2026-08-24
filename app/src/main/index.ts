@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
 import appIconPath from '../../resources/icon.png?asset'
 import chatTranslationScreenshotPath from '../../resources/chat_translation_screenshot.png?asset'
+import taskbarAlertIconPath from '../../resources/taskbar_alert.png?asset'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { spawn } from 'child_process'
@@ -20,13 +21,18 @@ import {
   registerChatComposeHandlers,
   startThaiChatTranslation,
   stopThaiChatTranslation,
-  isThaiChatTranslationActive
+  isThaiChatTranslationActive,
+  chatTranslationHealth,
+  onTranslationHealthChanged
 } from './thaiChatTranslation'
 import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
 import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory, translationLogPath } from './managerLogger'
+import { startLogTail, stopLogTail } from './logTail'
+import type { LogName } from './logTail'
 import type { Catalog } from './catalogClient'
+import type { TranslationHealth } from './thaiChatTranslation'
 
 if (!app.isPackaged) {
   app.setPath('userData', join(app.getPath('appData'), 'hon-reborn-mod-manager-development'))
@@ -418,6 +424,7 @@ function registerInterProcessHandlers(): void {
       if (!enabled) {
         stopThaiChatTranslation()
       }
+      broadcastTranslationHealth()
       return true
     }
     const enabledFileNames = new Set(loadEnabledFileNames())
@@ -489,6 +496,7 @@ function registerInterProcessHandlers(): void {
     if (!enabled) {
       stopThaiChatTranslation()
     }
+    broadcastTranslationHealth()
     return true
   })
 
@@ -637,6 +645,18 @@ function registerInterProcessHandlers(): void {
     return true
   })
 
+  ipcMain.handle('logs:tailStart', (event, logName: string) => {
+    const requested: LogName = logName === 'manager' ? 'manager' : 'translation'
+    return startLogTail(event.sender, requested)
+  })
+
+  ipcMain.handle('logs:tailStop', (event) => {
+    stopLogTail(event.sender)
+    return true
+  })
+
+  ipcMain.handle('chatTranslation:health', () => currentTranslationHealth())
+
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
     catalogUrl: catalogBaseUrl(),
@@ -659,6 +679,63 @@ function registerInterProcessHandlers(): void {
 let mainWindowReference: BrowserWindow | null = null
 let activeDownloadCancellationToken: CancellationToken | null = null
 let downloadedUpdateVersion = ''
+
+const HEALTH_BROADCAST_INTERVAL_MILLISECONDS = 3000
+
+let lastBroadcastHealthSignature = ''
+let taskbarAlertShowing = false
+
+function currentTranslationHealth(): TranslationHealth {
+  return chatTranslationHealth(loadChatTranslationEnabled())
+}
+
+// A red badge on the taskbar icon plus one flash is enough to notice translation broke mid game
+// without the manager stealing focus away from the match.
+function applyTaskbarAlert(shouldAlert: boolean): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const window = mainWindowReference
+  if (!window || window.isDestroyed() || shouldAlert === taskbarAlertShowing) {
+    return
+  }
+  taskbarAlertShowing = shouldAlert
+  if (shouldAlert) {
+    window.setOverlayIcon(nativeImage.createFromPath(taskbarAlertIconPath), 'Chat translation is failing')
+    if (!window.isFocused()) {
+      window.flashFrame(true)
+    }
+    logLine('translation', 'chat translation went unhealthy, flagging the taskbar')
+    return
+  }
+  window.flashFrame(false)
+  window.setOverlayIcon(null, '')
+  logLine('translation', 'chat translation recovered, clearing the taskbar flag')
+}
+
+function broadcastTranslationHealth(alwaysSend: boolean = false): void {
+  const health = currentTranslationHealth()
+  const signature = [
+    health.status,
+    health.detailKey,
+    JSON.stringify(health.detailParams),
+    health.translatedCount,
+    health.failedCount
+  ].join('|')
+  if (!alwaysSend && signature === lastBroadcastHealthSignature) {
+    return
+  }
+  lastBroadcastHealthSignature = signature
+  mainWindowReference?.webContents.send('chatTranslation:health', health)
+  applyTaskbarAlert(health.status === 'failing')
+}
+
+function startTranslationHealthWatch(): void {
+  onTranslationHealthChanged(() => broadcastTranslationHealth())
+  // Some transitions are pure time, a provider cooldown expiring or the relay staying silent,
+  // so a slow tick covers what the event hooks cannot see.
+  setInterval(() => broadcastTranslationHealth(), HEALTH_BROADCAST_INTERVAL_MILLISECONDS)
+}
 
 const UPDATE_CHECK_INTERVAL_MILLISECONDS = 60 * 60 * 1000
 
@@ -724,6 +801,8 @@ function createMainWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    taskbarAlertShowing = false
+    broadcastTranslationHealth(true)
   })
 
   mainWindow.on('close', (event) => {
@@ -836,6 +915,7 @@ app.whenReady().then(() => {
     return
   }
   createMainWindow()
+  startTranslationHealthWatch()
   resumeTranslationSessionIfGameRunning()
 
   if (app.isPackaged) {

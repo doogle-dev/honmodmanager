@@ -549,6 +549,18 @@ function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: 
 }
 
 const inboxWriteTimes = new Map<number, number>()
+
+// Entries the game never confirms would otherwise pile up for the whole session, and only the
+// recent ones say anything about whether delivery is working right now.
+function pruneUnconfirmedDeliveries(): void {
+  const now = Date.now()
+  for (const [sequence, writeTime] of inboxWriteTimes) {
+    if (now - writeTime > INBOX_ENTRY_LIFETIME_MILLISECONDS) {
+      inboxWriteTimes.delete(sequence)
+    }
+  }
+}
+
 const DELIVERY_RETRY_LIMIT = 2
 const DELIVERY_RETRY_DELAY_MILLISECONDS = 2500
 let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number } | null = null
@@ -559,6 +571,7 @@ function retryLastDelivery(): void {
     if (pending) {
       logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
       lastDelivery = null
+      noteDeliveryMissed()
     }
     return
   }
@@ -582,6 +595,7 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
   } else {
     lastDelivery = null
   }
+  pruneUnconfirmedDeliveries()
   chatInboxSequence += 1
   inboxWriteTimes.set(chatInboxSequence, Date.now())
   chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
@@ -592,6 +606,7 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
 
 function queueChannelInboxLine(luaCall: string): void {
   lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'channel', luaCall, attempts: 0 }
+  pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
   inboxWriteTimes.set(channelInboxSequence, Date.now())
   channelInboxEntries.push({ sequence: channelInboxSequence, luaCall, time: Date.now() })
@@ -761,6 +776,192 @@ function waitMilliseconds(duration: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, duration))
 }
 
+export type TranslationHealthStatus =
+  | 'off'
+  | 'idle'
+  | 'waiting'
+  | 'listening'
+  | 'healthy'
+  | 'degraded'
+  | 'failing'
+
+export type TranslationHealth = {
+  status: TranslationHealthStatus
+  detailKey: string
+  detailParams: Record<string, string | number>
+  sessionActive: boolean
+  relaySeen: boolean
+  translatedCount: number
+  failedCount: number
+  consecutiveFailures: number
+  lastFailureReason: string
+  lastSuccessAt: number
+  lastFailureAt: number
+  coolingDownProviders: string[]
+}
+
+const RELAY_SILENCE_MILLISECONDS = 90000
+const DELIVERY_SILENCE_MILLISECONDS = 45000
+const FAILING_FAILURE_STREAK = 3
+const FAILING_DELIVERY_MISSES = 3
+const DEGRADED_FAILURE_WINDOW_MILLISECONDS = 2 * 60 * 1000
+
+let sessionStartedAt = 0
+let translatedCount = 0
+let failedCount = 0
+let consecutiveFailures = 0
+let lastSuccessAt = 0
+let lastFailureAt = 0
+let lastFailureReason = ''
+let lastDeliveryConfirmedAt = 0
+let consecutiveDeliveryMisses = 0
+let healthChangeListener: (() => void) | null = null
+
+export function onTranslationHealthChanged(listener: () => void): void {
+  healthChangeListener = listener
+}
+
+function reportHealthChange(): void {
+  try {
+    healthChangeListener?.()
+  } catch {}
+}
+
+function resetHealthCounters(): void {
+  sessionStartedAt = Date.now()
+  translatedCount = 0
+  failedCount = 0
+  consecutiveFailures = 0
+  lastSuccessAt = 0
+  lastFailureAt = 0
+  lastFailureReason = ''
+  lastDeliveryConfirmedAt = 0
+  consecutiveDeliveryMisses = 0
+  inboxWriteTimes.clear()
+}
+
+// The game echoes how many chat lines a delivery replaced. Anything above zero proves the whole
+// path works, so it clears the pending writes we cannot match up by sequence number.
+function noteDeliveryConfirmed(): void {
+  lastDeliveryConfirmedAt = Date.now()
+  consecutiveDeliveryMisses = 0
+  inboxWriteTimes.clear()
+  reportHealthChange()
+}
+
+function noteDeliveryMissed(): void {
+  consecutiveDeliveryMisses += 1
+  reportHealthChange()
+}
+
+function noteTranslationSuccess(): void {
+  translatedCount += 1
+  consecutiveFailures = 0
+  lastSuccessAt = Date.now()
+  reportHealthChange()
+}
+
+const FAILURE_REASON_LIMIT = 140
+
+function noteTranslationFailure(reason: string): void {
+  failedCount += 1
+  consecutiveFailures += 1
+  lastFailureAt = Date.now()
+  lastFailureReason = reason.length > FAILURE_REASON_LIMIT ? reason.slice(0, FAILURE_REASON_LIMIT) + '...' : reason
+  reportHealthChange()
+}
+
+function coolingDownProviderNames(): string[] {
+  const now = Date.now()
+  return translationProviders.filter((provider) => provider.blockedUntil > now).map((provider) => provider.name)
+}
+
+function oldestUnconfirmedDeliveryAt(): number {
+  let oldest = 0
+  for (const writeTime of inboxWriteTimes.values()) {
+    if (oldest === 0 || writeTime < oldest) {
+      oldest = writeTime
+    }
+  }
+  return oldest
+}
+
+export function chatTranslationHealth(featureEnabled: boolean): TranslationHealth {
+  const now = Date.now()
+  const coolingDown = coolingDownProviderNames()
+  const health: TranslationHealth = {
+    status: 'off',
+    detailKey: 'healthOffDetail',
+    detailParams: {},
+    sessionActive: translationActive,
+    relaySeen: sawAnyRelayLine,
+    translatedCount,
+    failedCount,
+    consecutiveFailures,
+    lastFailureReason,
+    lastSuccessAt,
+    lastFailureAt,
+    coolingDownProviders: coolingDown
+  }
+  if (!featureEnabled) {
+    return health
+  }
+  if (!translationActive) {
+    health.status = 'idle'
+    health.detailKey = 'healthIdleDetail'
+    return health
+  }
+  if (!sawAnyRelayLine) {
+    const silentFor = now - sessionStartedAt
+    health.status = silentFor >= RELAY_SILENCE_MILLISECONDS ? 'failing' : 'waiting'
+    health.detailKey = silentFor >= RELAY_SILENCE_MILLISECONDS ? 'healthNoRelayDetail' : 'healthWaitingDetail'
+    return health
+  }
+  if (consecutiveFailures >= FAILING_FAILURE_STREAK) {
+    health.status = 'failing'
+    health.detailKey = 'healthProvidersDownDetail'
+    health.detailParams = { reason: lastFailureReason }
+    return health
+  }
+  const oldestUnconfirmed = oldestUnconfirmedDeliveryAt()
+  const deliveryWentSilent =
+    oldestUnconfirmed > 0 &&
+    now - oldestUnconfirmed >= DELIVERY_SILENCE_MILLISECONDS &&
+    now - lastDeliveryConfirmedAt >= DELIVERY_SILENCE_MILLISECONDS
+  if (consecutiveDeliveryMisses >= FAILING_DELIVERY_MISSES || deliveryWentSilent) {
+    health.status = 'failing'
+    health.detailKey = 'healthNotReachingGameDetail'
+    return health
+  }
+  // A single provider resting is the fallback working as designed, not a problem worth flagging.
+  // Only losing every provider actually stops the next message from being translated.
+  if (coolingDown.length >= translationProviders.length) {
+    health.status = 'degraded'
+    health.detailKey = 'healthAllProvidersCoolingDetail'
+    return health
+  }
+  if (consecutiveFailures > 0 && now - lastFailureAt < DEGRADED_FAILURE_WINDOW_MILLISECONDS) {
+    health.status = 'degraded'
+    health.detailKey = 'healthRecentFailureDetail'
+    health.detailParams = { reason: lastFailureReason }
+    return health
+  }
+  if (translatedCount === 0) {
+    health.status = 'listening'
+    health.detailKey = 'healthNoChatYetDetail'
+    return health
+  }
+  health.status = 'healthy'
+  if (coolingDown.length > 0) {
+    health.detailKey = 'healthHealthyRestingDetail'
+    health.detailParams = { count: translatedCount, providers: coolingDown.join(', ') }
+    return health
+  }
+  health.detailKey = 'healthHealthyDetail'
+  health.detailParams = { count: translatedCount }
+  return health
+}
+
 let translationCallChain: Promise<unknown> = Promise.resolve()
 
 function rateLimitedTranslate(messageText: string): Promise<string> {
@@ -798,13 +999,16 @@ async function translateWithCache(messageText: string): Promise<string> {
     translatedText = await rateLimitedTranslate(messageText)
   } catch (error) {
     logLine('translation', 'translate failed after retry for: ' + messageText.slice(0, 80) + ' error: ' + String(error))
+    noteTranslationFailure(describeTranslationFailure(error))
     throw error
   }
   if (translatedText) {
     persistentTranslationCache.set(cacheKey, translatedText)
     scheduleCacheSave()
+    noteTranslationSuccess()
   } else {
     logLine('translation', 'empty translation returned for: ' + messageText.slice(0, 80))
+    noteTranslationFailure('the translation service returned nothing')
   }
   return translatedText
 }
@@ -1352,20 +1556,27 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     if (writeTime !== undefined) {
       inboxWriteTimes.delete(sequence)
       logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeTime) + 'ms')
+      noteDeliveryConfirmed()
     }
     dropAppliedInboxEntry(sequence)
   }
   if (line.includes('HONCHATSENT|')) {
     dropSentChatInboxEntries()
+    noteDeliveryConfirmed()
   }
-  const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0|HONWHISPERDELIVERED\|0|HONIMDELIVERED\|0/.exec(line)
-  if (missedMatch) {
-    retryLastDelivery()
+  const deliveredMatch = /HON(?:CHAT|CHAN|WHISPER|IM)DELIVERED\|(\d+)/.exec(line)
+  if (deliveredMatch) {
+    if (parseInt(deliveredMatch[1], 10) > 0) {
+      noteDeliveryConfirmed()
+    } else {
+      retryLastDelivery()
+    }
   }
   if (line.includes('HONCHA') || line.includes('HONWHISPER') || line.includes('HONIM')) {
     if (!sawAnyRelayLine) {
       sawAnyRelayLine = true
       logLine('translation', 'first relay line received, the game side is alive')
+      reportHealthChange()
     }
     logLine('relay', line)
   }
@@ -1446,12 +1657,15 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
     'session started, target language ' + targetLanguage + ', ' + (gameProcess ? 'attached to launched game' : 'standalone, game was already running')
   )
   sawAnyRelayLine = false
+  resetHealthCounters()
+  reportHealthChange()
   relayWatchdogTimer = setTimeout(() => {
     if (translationActive && !sawAnyRelayLine) {
       logLine(
         'translation',
         'no relay lines from the game after 90 seconds. The game side is not talking. Check that the game was launched modded through the manager and that chat translation was enabled before the launch'
       )
+      reportHealthChange()
     }
   }, 90000)
   lastRelayCounter = 0
@@ -1490,6 +1704,7 @@ export function stopThaiChatTranslation(): void {
   }
   translationActive = false
   logLine('translation', 'session stopped')
+  reportHealthChange()
   if (relayWatchdogTimer) {
     clearTimeout(relayWatchdogTimer)
     relayWatchdogTimer = null
