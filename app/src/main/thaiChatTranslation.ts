@@ -987,13 +987,12 @@ function rateLimitedTranslate(messageText: string): Promise<string> {
   return callPromise
 }
 
-async function translateWithCache(messageText: string): Promise<string> {
-  loadPersistentCache()
-  const cacheKey = translationTargetLanguage + '|' + messageText
-  const cached = persistentTranslationCache.get(cacheKey)
-  if (cached !== undefined) {
-    return cached
-  }
+// In a lobby the channel relay and the game chat relay report the same message a few milliseconds
+// apart. Both miss the finished cache because neither call has returned yet, so without this the
+// same text is sent to the translation service twice, doubling the rate limit pressure.
+const pendingTranslations = new Map<string, Promise<string>>()
+
+async function performTranslation(messageText: string, cacheKey: string): Promise<string> {
   let translatedText = ''
   try {
     translatedText = await rateLimitedTranslate(messageText)
@@ -1011,6 +1010,29 @@ async function translateWithCache(messageText: string): Promise<string> {
     noteTranslationFailure('the translation service returned nothing')
   }
   return translatedText
+}
+
+async function translateWithCache(messageText: string): Promise<string> {
+  loadPersistentCache()
+  const cacheKey = translationTargetLanguage + '|' + messageText
+  const cached = persistentTranslationCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const alreadyRunning = pendingTranslations.get(cacheKey)
+  if (alreadyRunning) {
+    logLine('translation', 'reusing the in flight translation for: ' + messageText.slice(0, 60))
+    return await alreadyRunning
+  }
+  const translationPromise = performTranslation(messageText, cacheKey)
+  pendingTranslations.set(cacheKey, translationPromise)
+  try {
+    return await translationPromise
+  } finally {
+    if (pendingTranslations.get(cacheKey) === translationPromise) {
+      pendingTranslations.delete(cacheKey)
+    }
+  }
 }
 
 function extractChatBody(relayText: string): string {
