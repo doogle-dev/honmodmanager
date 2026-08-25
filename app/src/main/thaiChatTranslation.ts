@@ -564,7 +564,13 @@ function pruneUnconfirmedDeliveries(): void {
 const DELIVERY_RETRY_LIMIT = 2
 const DELIVERY_RETRY_DELAY_MILLISECONDS = 2500
 const DELIVERY_RETRY_MAX_AGE_MILLISECONDS = 30000
-let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number; queuedAt: number } | null = null
+let lastDelivery: {
+  kind: 'chat' | 'channel'
+  luaCall: string
+  attempts: number
+  queuedAt: number
+  retryPending: boolean
+} | null = null
 
 function dropDeliveryInboxEntries(luaCall: string): void {
   const chatCountBefore = chatInboxEntries.length
@@ -603,10 +609,15 @@ function retryLastDelivery(): void {
     noteDeliveryMissed()
     return
   }
+  if (pending.retryPending) {
+    return
+  }
   pending.attempts += 1
+  pending.retryPending = true
   logLine('translation', 'the chat line to replace was not found, retry ' + pending.attempts)
   setTimeout(() => {
-    if (!translationActive) {
+    pending.retryPending = false
+    if (!translationActive || lastDelivery !== pending) {
       return
     }
     if (pending.kind === 'chat') {
@@ -622,7 +633,7 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
     lastDelivery =
       lastDelivery && lastDelivery.luaCall === luaCall
         ? lastDelivery
-        : { kind: 'chat', luaCall, attempts: 0, queuedAt: Date.now() }
+        : { kind: 'chat', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
   } else {
     lastDelivery = null
   }
@@ -639,7 +650,7 @@ function queueChannelInboxLine(luaCall: string): void {
   lastDelivery =
     lastDelivery && lastDelivery.luaCall === luaCall
       ? lastDelivery
-      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now() }
+      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
   pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
   inboxWriteTimes.set(channelInboxSequence, { time: Date.now(), kind: 'channel' })
