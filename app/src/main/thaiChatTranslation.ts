@@ -144,7 +144,70 @@ const CHAT_DEFINITIONS_BODY = [
   '\t\tend',
   '\tend)',
   'end',
+  '',
+  "ChatTranslatorAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'",
+  '',
+  'function ChatTranslatorEncode(input)',
+  '\tlocal output = {}',
+  '\tfor index = 1, #input, 3 do',
+  '\t\tlocal byteOne = string.byte(input, index)',
+  '\t\tlocal byteTwo = string.byte(input, index + 1)',
+  '\t\tlocal byteThree = string.byte(input, index + 2)',
+  '\t\tlocal chunk = byteOne * 65536 + (byteTwo or 0) * 256 + (byteThree or 0)',
+  '\t\tlocal charFour = chunk % 64',
+  '\t\tchunk = (chunk - charFour) / 64',
+  '\t\tlocal charThree = chunk % 64',
+  '\t\tchunk = (chunk - charThree) / 64',
+  '\t\tlocal charTwo = chunk % 64',
+  '\t\tchunk = (chunk - charTwo) / 64',
+  '\t\tlocal charOne = chunk % 64',
+  '\t\ttable.insert(output, string.sub(ChatTranslatorAlphabet, charOne + 1, charOne + 1))',
+  '\t\ttable.insert(output, string.sub(ChatTranslatorAlphabet, charTwo + 1, charTwo + 1))',
+  "\t\ttable.insert(output, byteTwo and string.sub(ChatTranslatorAlphabet, charThree + 1, charThree + 1) or '=')",
+  "\t\ttable.insert(output, byteThree and string.sub(ChatTranslatorAlphabet, charFour + 1, charFour + 1) or '=')",
+  '\tend',
+  '\treturn table.concat(output)',
+  'end',
+  '',
+  'function ChatWhisperTranslatorDeliver(prefixEncoded, messageEncoded, translatedEncoded)',
+  '\tpcall(function()',
+  '\t\tlocal originalPrefix = ChatTranslatorDecode(prefixEncoded)',
+  '\t\tlocal originalMessage = ChatTranslatorDecode(messageEncoded)',
+  '\t\tlocal translatedText = ChatTranslatorDecode(translatedEncoded)',
+  "\t\tif translatedText == '' then return end",
+  '\t\tlocal replacedCount = 0',
+  '\t\tfor index = 1, #GameChat.gameChat do',
+  '\t\t\tlocal chatEntry = GameChat.gameChat[index]',
+  "\t\t\tif tostring(chatEntry.prefix or '') == originalPrefix and tostring(chatEntry.message or '') == originalMessage then",
+  '\t\t\t\tchatEntry.message = translatedText',
+  '\t\t\t\treplacedCount = replacedCount + 1',
+  '\t\t\tend',
+  '\t\tend',
+  '\t\tif replacedCount > 0 then',
+  '\t\t\tlocal currentLine = GameChat:BuildChatTable(nil)',
+  '\t\t\tGameChat.TransferChatTable(GameChat, currentLine, 0)',
+  '\t\t\tGameChat:UpdateChatScroller()',
+  '\t\tend',
+  "\t\tEcho('HONWHISPERDELIVERED|' .. tostring(replacedCount))",
+  '\tend)',
+  'end',
   ''
+].join('\n')
+
+const WHISPER_RELAY_ANCHOR =
+  "\ttable.insert(GameChat.gameChat,  { messageType = messageType, soundMessageType = messageType, channel = '', prefix = prefix, message = message, sender = sender, entity = '', hosttime = hosttime, playerIndex = '', team = 1, senderName = senderName, userTag = userTag, isBuddy = isBuddy, isMe = isMe} )"
+
+const WHISPER_RELAY_HOOK_BODY = [
+  '\tpcall(function()',
+  '\t\tif ChatTranslatorEncode == nil then return end',
+  '\t\tlocal whisperEntry = GameChat.gameChat[#GameChat.gameChat]',
+  '\t\tif whisperEntry == nil then return end',
+  "\t\tlocal whisperPrefix = tostring(whisperEntry.prefix or '')",
+  "\t\tlocal whisperMessage = tostring(whisperEntry.message or '')",
+  "\t\tif whisperMessage == '' then return end",
+  '\t\tChatWhisperRelayCounter = (ChatWhisperRelayCounter or 0) + 1',
+  "\t\tEcho('HONWHISPERRELAY|' .. tostring(ChatWhisperRelayCounter) .. '|' .. ChatTranslatorEncode(tostring(senderName or '')) .. '|' .. ChatTranslatorEncode(whisperPrefix) .. '|' .. ChatTranslatorEncode(whisperMessage))",
+  '\tend)'
 ].join('\n')
 
 const CHANNEL_DEFINITIONS_ANCHOR = 'function ProcessMessage(prefix, message, sender, allow)'
@@ -292,6 +355,50 @@ const CHANNEL_RELAY_HOOK_BODY = [
   '\tend)'
 ].join('\n')
 
+const SOCIAL_IM_DEFINITIONS_ANCHOR = 'function Social_IM:RefreshCurrentChat()'
+
+const SOCIAL_IM_DEFINITIONS_BODY = [
+  'function SocialImTranslatorDeliver(prefixEncoded, messageEncoded, translatedEncoded)',
+  '\tpcall(function()',
+  '\t\tif ChannelTranslatorDecode == nil then return end',
+  '\t\tlocal originalPrefix = ChannelTranslatorDecode(prefixEncoded)',
+  '\t\tlocal originalMessage = ChannelTranslatorDecode(messageEncoded)',
+  '\t\tlocal translatedText = ChannelTranslatorDecode(translatedEncoded)',
+  "\t\tif translatedText == '' then return end",
+  '\t\tlocal replacedCount = 0',
+  '\t\tfor _, chatHistory in pairs(Social_IM.chatHistories) do',
+  "\t\t\tif type(chatHistory) == 'table' then",
+  '\t\t\t\tfor index = 1, #chatHistory do',
+  '\t\t\t\t\tlocal entry = chatHistory[index]',
+  "\t\t\t\t\tif type(entry) == 'table' and entry.prefix == originalPrefix and entry.message == originalMessage then",
+  '\t\t\t\t\t\tentry.message = translatedText',
+  '\t\t\t\t\t\treplacedCount = replacedCount + 1',
+  '\t\t\t\t\tend',
+  '\t\t\t\tend',
+  '\t\t\tend',
+  '\t\tend',
+  '\t\tif replacedCount > 0 then',
+  '\t\t\tpcall(function() Social_IM:RefreshCurrentChat() end)',
+  '\t\tend',
+  "\t\tEcho('HONIMDELIVERED|' .. tostring(replacedCount))",
+  '\tend)',
+  'end',
+  ''
+].join('\n')
+
+const SOCIAL_IM_RELAY_ANCHOR =
+  '\t\ttable.insert(Social_IM.chatHistories[lName], {prefix = prefix, message = message, sender = sender})'
+
+const SOCIAL_IM_RELAY_HOOK_BODY = [
+  '\t\tpcall(function()',
+  '\t\t\tif ChannelTranslatorEncode == nil then return end',
+  "\t\t\tlocal privateMessage = tostring(message or '')",
+  "\t\t\tif privateMessage == '' then return end",
+  '\t\t\tSocialImRelayCounter = (SocialImRelayCounter or 0) + 1',
+  "\t\t\tEcho('HONIMRELAY|' .. tostring(SocialImRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(name or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(privateMessage))",
+  '\t\tend)'
+].join('\n')
+
 export const chatRelayLuaEdits = [
   {
     targetPath: 'ui/scripts/fe3/communicator.lua',
@@ -314,6 +421,21 @@ export const chatRelayLuaEdits = [
     replace: CHAT_RELAY_ANCHOR + '\n' + CHAT_RELAY_HOOK_BODY
   },
   {
+    targetPath: 'ui/scripts/game/chat.lua',
+    find: WHISPER_RELAY_ANCHOR,
+    replace: WHISPER_RELAY_ANCHOR + '\n' + WHISPER_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_DEFINITIONS_ANCHOR,
+    replace: SOCIAL_IM_DEFINITIONS_BODY + '\n' + SOCIAL_IM_DEFINITIONS_ANCHOR
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_RELAY_ANCHOR,
+    replace: SOCIAL_IM_RELAY_ANCHOR + '\n' + SOCIAL_IM_RELAY_HOOK_BODY
+  },
+  {
     targetPath: 'ui/game_chat.interface',
     find: '<trigger name="MapChatMessage" />',
     replace:
@@ -332,6 +454,10 @@ let translationTargetLanguage: 'en' | 'th' = 'en'
 const RELAY_LINE_PATTERN = /HONCHATRELAY\|(\d+)\|([^|]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
 const CHANNEL_RELAY_LINE_PATTERN =
   /HONCHANRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
+const WHISPER_RELAY_LINE_PATTERN =
+  /HONWHISPERRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
+const PRIVATE_MESSAGE_RELAY_LINE_PATTERN =
+  /HONIMRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
 const THAI_CHARACTER_PATTERN = new RegExp('[\\u0E00-\\u0E7F]')
 const COLOR_CODE_PATTERN = /\^\d{1,3}|\^\*|\^;|\^[A-Za-z]/g
 const OVERLAY_MESSAGE_LIMIT = 6
@@ -344,6 +470,10 @@ let relayWatchdogTimer: NodeJS.Timeout | null = null
 let messageCounter = 0
 let lastRelayCounter = 0
 let lastChannelRelayCounter = 0
+let lastWhisperRelayCounter = 0
+let lastPrivateMessageRelayCounter = 0
+const recentWhisperTimes = new Map<string, number>()
+const recentPrivateMessageTimes = new Map<string, number>()
 let pendingDuplicateText = ''
 let pendingDuplicateCounter = 0
 let pendingDuplicateTime = 0
@@ -418,24 +548,76 @@ function rewriteInboxFile(fileName: string, applyFunctionName: string, entries: 
   writeFileSync(inboxPath, fileLines.join('\n') + '\n')
 }
 
-const inboxWriteTimes = new Map<number, number>()
+const inboxWriteTimes = new Map<number, { time: number; kind: 'chat' | 'channel' }>()
+
+// Entries the game never confirms would otherwise pile up for the whole session, and only the
+// recent ones say anything about whether delivery is working right now.
+function pruneUnconfirmedDeliveries(): void {
+  const now = Date.now()
+  for (const [sequence, writeRecord] of inboxWriteTimes) {
+    if (now - writeRecord.time > INBOX_ENTRY_LIFETIME_MILLISECONDS) {
+      inboxWriteTimes.delete(sequence)
+    }
+  }
+}
+
 const DELIVERY_RETRY_LIMIT = 2
 const DELIVERY_RETRY_DELAY_MILLISECONDS = 2500
-let lastDelivery: { kind: 'chat' | 'channel'; luaCall: string; attempts: number } | null = null
+const DELIVERY_RETRY_MAX_AGE_MILLISECONDS = 30000
+let lastDelivery: {
+  kind: 'chat' | 'channel'
+  luaCall: string
+  attempts: number
+  queuedAt: number
+  retryPending: boolean
+} | null = null
+
+function dropDeliveryInboxEntries(luaCall: string): void {
+  const chatCountBefore = chatInboxEntries.length
+  chatInboxEntries = chatInboxEntries.filter((entry) => entry.luaCall !== luaCall)
+  if (chatInboxEntries.length !== chatCountBefore) {
+    rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
+  }
+  const channelCountBefore = channelInboxEntries.length
+  channelInboxEntries = channelInboxEntries.filter((entry) => entry.luaCall !== luaCall)
+  if (channelInboxEntries.length !== channelCountBefore) {
+    rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
+  }
+}
 
 function retryLastDelivery(): void {
   const pending = lastDelivery
-  if (!pending || pending.attempts >= DELIVERY_RETRY_LIMIT) {
-    if (pending) {
-      logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
-      lastDelivery = null
-    }
+  if (!pending) {
+    return
+  }
+  const pendingAge = Date.now() - pending.queuedAt
+  if (pendingAge > DELIVERY_RETRY_MAX_AGE_MILLISECONDS) {
+    logLine(
+      'translation',
+      'the chat line to replace was queued ' +
+        Math.round(pendingAge / 1000) +
+        's ago in an earlier game phase and its chat history is gone, dropping it without retry'
+    )
+    lastDelivery = null
+    dropDeliveryInboxEntries(pending.luaCall)
+    return
+  }
+  if (pending.attempts >= DELIVERY_RETRY_LIMIT) {
+    logLine('translation', 'the chat line to replace was gone, giving up after ' + pending.attempts + ' retries')
+    lastDelivery = null
+    dropDeliveryInboxEntries(pending.luaCall)
+    noteDeliveryMissed()
+    return
+  }
+  if (pending.retryPending) {
     return
   }
   pending.attempts += 1
+  pending.retryPending = true
   logLine('translation', 'the chat line to replace was not found, retry ' + pending.attempts)
   setTimeout(() => {
-    if (!translationActive) {
+    pending.retryPending = false
+    if (!translationActive || lastDelivery !== pending) {
       return
     }
     if (pending.kind === 'chat') {
@@ -448,12 +630,16 @@ function retryLastDelivery(): void {
 
 function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
   if (retryWhenMissed) {
-    lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'chat', luaCall, attempts: 0 }
+    lastDelivery =
+      lastDelivery && lastDelivery.luaCall === luaCall
+        ? lastDelivery
+        : { kind: 'chat', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
   } else {
     lastDelivery = null
   }
+  pruneUnconfirmedDeliveries()
   chatInboxSequence += 1
-  inboxWriteTimes.set(chatInboxSequence, Date.now())
+  inboxWriteTimes.set(chatInboxSequence, { time: Date.now(), kind: 'chat' })
   chatInboxEntries.push({ sequence: chatInboxSequence, luaCall, time: Date.now() })
   chatInboxEntries = pruneInboxEntries(chatInboxEntries)
   rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
@@ -461,9 +647,13 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
 }
 
 function queueChannelInboxLine(luaCall: string): void {
-  lastDelivery = lastDelivery && lastDelivery.luaCall === luaCall ? lastDelivery : { kind: 'channel', luaCall, attempts: 0 }
+  lastDelivery =
+    lastDelivery && lastDelivery.luaCall === luaCall
+      ? lastDelivery
+      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
+  pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
-  inboxWriteTimes.set(channelInboxSequence, Date.now())
+  inboxWriteTimes.set(channelInboxSequence, { time: Date.now(), kind: 'channel' })
   channelInboxEntries.push({ sequence: channelInboxSequence, luaCall, time: Date.now() })
   channelInboxEntries = pruneInboxEntries(channelInboxEntries)
   rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
@@ -526,6 +716,38 @@ function writeChannelTranslationInbox(prefixRaw: string, messageRaw: string, tra
   const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
   queueChannelInboxLine(
     "if ChannelTranslatorDeliver then ChannelTranslatorDeliver('" +
+      prefixEncoded +
+      "', '" +
+      messageEncoded +
+      "', '" +
+      translatedEncoded +
+      "') end"
+  )
+}
+
+function writeWhisperTranslationInbox(prefixRaw: string, messageRaw: string, translatedText: string): void {
+  const markedTranslation = '^458[T]^* ' + translatedText
+  const prefixEncoded = Buffer.from(prefixRaw, 'utf8').toString('base64')
+  const messageEncoded = Buffer.from(messageRaw, 'utf8').toString('base64')
+  const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
+  queueChatInboxLine(
+    "if ChatWhisperTranslatorDeliver then ChatWhisperTranslatorDeliver('" +
+      prefixEncoded +
+      "', '" +
+      messageEncoded +
+      "', '" +
+      translatedEncoded +
+      "') end"
+  )
+}
+
+function writePrivateMessageTranslationInbox(prefixRaw: string, messageRaw: string, translatedText: string): void {
+  const markedTranslation = '^458[T]^* ' + translatedText
+  const prefixEncoded = Buffer.from(prefixRaw, 'utf8').toString('base64')
+  const messageEncoded = Buffer.from(messageRaw, 'utf8').toString('base64')
+  const translatedEncoded = Buffer.from(markedTranslation, 'utf8').toString('base64')
+  queueChannelInboxLine(
+    "if SocialImTranslatorDeliver then SocialImTranslatorDeliver('" +
       prefixEncoded +
       "', '" +
       messageEncoded +
@@ -599,6 +821,195 @@ function waitMilliseconds(duration: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, duration))
 }
 
+export type TranslationHealthStatus =
+  | 'off'
+  | 'idle'
+  | 'waiting'
+  | 'listening'
+  | 'healthy'
+  | 'degraded'
+  | 'failing'
+
+export type TranslationHealth = {
+  status: TranslationHealthStatus
+  detailKey: string
+  detailParams: Record<string, string | number>
+  sessionActive: boolean
+  relaySeen: boolean
+  translatedCount: number
+  failedCount: number
+  consecutiveFailures: number
+  lastFailureReason: string
+  lastSuccessAt: number
+  lastFailureAt: number
+  coolingDownProviders: string[]
+}
+
+const RELAY_SILENCE_MILLISECONDS = 90000
+const DELIVERY_SILENCE_MILLISECONDS = 45000
+const FAILING_FAILURE_STREAK = 3
+const FAILING_DELIVERY_MISSES = 3
+const DEGRADED_FAILURE_WINDOW_MILLISECONDS = 2 * 60 * 1000
+
+let sessionStartedAt = 0
+let translatedCount = 0
+let failedCount = 0
+let consecutiveFailures = 0
+let lastSuccessAt = 0
+let lastFailureAt = 0
+let lastFailureReason = ''
+let lastDeliveryConfirmedAt = 0
+let consecutiveDeliveryMisses = 0
+let healthChangeListener: (() => void) | null = null
+
+export function onTranslationHealthChanged(listener: () => void): void {
+  healthChangeListener = listener
+}
+
+function reportHealthChange(): void {
+  try {
+    healthChangeListener?.()
+  } catch {}
+}
+
+function resetHealthCounters(): void {
+  sessionStartedAt = Date.now()
+  translatedCount = 0
+  failedCount = 0
+  consecutiveFailures = 0
+  lastSuccessAt = 0
+  lastFailureAt = 0
+  lastFailureReason = ''
+  lastDeliveryConfirmedAt = 0
+  consecutiveDeliveryMisses = 0
+  inboxWriteTimes.clear()
+}
+
+// The game echoes how many chat lines a delivery replaced. Anything above zero proves the whole
+// path works, so it clears the pending writes we cannot match up by sequence number.
+function noteDeliveryConfirmed(): void {
+  lastDeliveryConfirmedAt = Date.now()
+  consecutiveDeliveryMisses = 0
+  inboxWriteTimes.clear()
+  reportHealthChange()
+}
+
+function noteDeliveryMissed(): void {
+  consecutiveDeliveryMisses += 1
+  reportHealthChange()
+}
+
+function noteTranslationSuccess(): void {
+  translatedCount += 1
+  consecutiveFailures = 0
+  lastSuccessAt = Date.now()
+  reportHealthChange()
+}
+
+const FAILURE_REASON_LIMIT = 140
+
+function noteTranslationFailure(reason: string): void {
+  failedCount += 1
+  consecutiveFailures += 1
+  lastFailureAt = Date.now()
+  lastFailureReason = reason.length > FAILURE_REASON_LIMIT ? reason.slice(0, FAILURE_REASON_LIMIT) + '...' : reason
+  reportHealthChange()
+}
+
+function coolingDownProviderNames(): string[] {
+  const now = Date.now()
+  return translationProviders.filter((provider) => provider.blockedUntil > now).map((provider) => provider.name)
+}
+
+function oldestUnconfirmedDeliveryAt(): number {
+  let oldest = 0
+  for (const writeRecord of inboxWriteTimes.values()) {
+    if (writeRecord.kind !== 'chat') {
+      continue
+    }
+    if (oldest === 0 || writeRecord.time < oldest) {
+      oldest = writeRecord.time
+    }
+  }
+  return oldest
+}
+
+export function chatTranslationHealth(featureEnabled: boolean): TranslationHealth {
+  const now = Date.now()
+  const coolingDown = coolingDownProviderNames()
+  const health: TranslationHealth = {
+    status: 'off',
+    detailKey: 'healthOffDetail',
+    detailParams: {},
+    sessionActive: translationActive,
+    relaySeen: sawAnyRelayLine,
+    translatedCount,
+    failedCount,
+    consecutiveFailures,
+    lastFailureReason,
+    lastSuccessAt,
+    lastFailureAt,
+    coolingDownProviders: coolingDown
+  }
+  if (!featureEnabled) {
+    return health
+  }
+  if (!translationActive) {
+    health.status = 'idle'
+    health.detailKey = 'healthIdleDetail'
+    return health
+  }
+  if (!sawAnyRelayLine) {
+    const silentFor = now - sessionStartedAt
+    health.status = silentFor >= RELAY_SILENCE_MILLISECONDS ? 'failing' : 'waiting'
+    health.detailKey = silentFor >= RELAY_SILENCE_MILLISECONDS ? 'healthNoRelayDetail' : 'healthWaitingDetail'
+    return health
+  }
+  if (consecutiveFailures >= FAILING_FAILURE_STREAK) {
+    health.status = 'failing'
+    health.detailKey = 'healthProvidersDownDetail'
+    health.detailParams = { reason: lastFailureReason }
+    return health
+  }
+  const oldestUnconfirmed = oldestUnconfirmedDeliveryAt()
+  const deliveryWentSilent =
+    oldestUnconfirmed > 0 &&
+    now - oldestUnconfirmed >= DELIVERY_SILENCE_MILLISECONDS &&
+    now - lastDeliveryConfirmedAt >= DELIVERY_SILENCE_MILLISECONDS
+  if (consecutiveDeliveryMisses >= FAILING_DELIVERY_MISSES || deliveryWentSilent) {
+    health.status = 'failing'
+    health.detailKey = 'healthNotReachingGameDetail'
+    return health
+  }
+  // A single provider resting is the fallback working as designed, not a problem worth flagging.
+  // Only losing every provider actually stops the next message from being translated.
+  if (coolingDown.length >= translationProviders.length) {
+    health.status = 'degraded'
+    health.detailKey = 'healthAllProvidersCoolingDetail'
+    return health
+  }
+  if (consecutiveFailures > 0 && now - lastFailureAt < DEGRADED_FAILURE_WINDOW_MILLISECONDS) {
+    health.status = 'degraded'
+    health.detailKey = 'healthRecentFailureDetail'
+    health.detailParams = { reason: lastFailureReason }
+    return health
+  }
+  if (translatedCount === 0) {
+    health.status = 'listening'
+    health.detailKey = 'healthNoChatYetDetail'
+    return health
+  }
+  health.status = 'healthy'
+  if (coolingDown.length > 0) {
+    health.detailKey = 'healthHealthyRestingDetail'
+    health.detailParams = { count: translatedCount, providers: coolingDown.join(', ') }
+    return health
+  }
+  health.detailKey = 'healthHealthyDetail'
+  health.detailParams = { count: translatedCount }
+  return health
+}
+
 let translationCallChain: Promise<unknown> = Promise.resolve()
 
 function rateLimitedTranslate(messageText: string): Promise<string> {
@@ -624,6 +1035,31 @@ function rateLimitedTranslate(messageText: string): Promise<string> {
   return callPromise
 }
 
+// In a lobby the channel relay and the game chat relay report the same message a few milliseconds
+// apart. Both miss the finished cache because neither call has returned yet, so without this the
+// same text is sent to the translation service twice, doubling the rate limit pressure.
+const pendingTranslations = new Map<string, Promise<string>>()
+
+async function performTranslation(messageText: string, cacheKey: string): Promise<string> {
+  let translatedText = ''
+  try {
+    translatedText = await rateLimitedTranslate(messageText)
+  } catch (error) {
+    logLine('translation', 'translate failed after retry for: ' + messageText.slice(0, 80) + ' error: ' + String(error))
+    noteTranslationFailure(describeTranslationFailure(error))
+    throw error
+  }
+  if (translatedText) {
+    persistentTranslationCache.set(cacheKey, translatedText)
+    scheduleCacheSave()
+    noteTranslationSuccess()
+  } else {
+    logLine('translation', 'empty translation returned for: ' + messageText.slice(0, 80))
+    noteTranslationFailure('the translation service returned nothing')
+  }
+  return translatedText
+}
+
 async function translateWithCache(messageText: string): Promise<string> {
   loadPersistentCache()
   const cacheKey = translationTargetLanguage + '|' + messageText
@@ -631,20 +1067,20 @@ async function translateWithCache(messageText: string): Promise<string> {
   if (cached !== undefined) {
     return cached
   }
-  let translatedText = ''
+  const alreadyRunning = pendingTranslations.get(cacheKey)
+  if (alreadyRunning) {
+    logLine('translation', 'reusing the in flight translation for: ' + messageText.slice(0, 60))
+    return await alreadyRunning
+  }
+  const translationPromise = performTranslation(messageText, cacheKey)
+  pendingTranslations.set(cacheKey, translationPromise)
   try {
-    translatedText = await rateLimitedTranslate(messageText)
-  } catch (error) {
-    logLine('translation', 'translate failed after retry for: ' + messageText.slice(0, 80) + ' error: ' + String(error))
-    throw error
+    return await translationPromise
+  } finally {
+    if (pendingTranslations.get(cacheKey) === translationPromise) {
+      pendingTranslations.delete(cacheKey)
+    }
   }
-  if (translatedText) {
-    persistentTranslationCache.set(cacheKey, translatedText)
-    scheduleCacheSave()
-  } else {
-    logLine('translation', 'empty translation returned for: ' + messageText.slice(0, 80))
-  }
-  return translatedText
 }
 
 function extractChatBody(relayText: string): string {
@@ -1065,32 +1501,162 @@ function handleChannelRelayLine(line: string): boolean {
   return true
 }
 
+function forgetStaleTimes(seenTimes: Map<string, number>, now: number): void {
+  for (const [key, seenTime] of seenTimes) {
+    if (now - seenTime > DUPLICATE_WINDOW_MILLISECONDS) {
+      seenTimes.delete(key)
+    }
+  }
+}
+
+function handleWhisperRelayLine(line: string): boolean {
+  const match = WHISPER_RELAY_LINE_PATTERN.exec(line)
+  if (!match) {
+    return false
+  }
+  const relayCounter = parseInt(match[1], 10)
+  if (relayCounter === lastWhisperRelayCounter) {
+    return true
+  }
+  lastWhisperRelayCounter = relayCounter
+  const senderName = decodeRelayField(match[2]).replace(COLOR_CODE_PATTERN, '').trim()
+  const prefixRaw = decodeRelayField(match[3])
+  const messageRaw = decodeRelayField(match[4])
+  const messageBody = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  if (messageBody === '') {
+    logLine('translation', 'whisper skipped, the message was empty after removing colour codes, sender ' + senderName)
+    return true
+  }
+  if (!needsTranslation(messageBody)) {
+    logLine('translation', 'whisper skipped, no translation needed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  const now = Date.now()
+  const duplicateKey = prefixRaw + '|' + messageRaw
+  const previousTime = recentWhisperTimes.get(duplicateKey)
+  if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+    logLine('translation', 'whisper duplicate suppressed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  recentWhisperTimes.set(duplicateKey, now)
+  forgetStaleTimes(recentWhisperTimes, now)
+  logLine('translation', 'whisper translating from ' + senderName + ': ' + messageBody.slice(0, 60))
+  translateWithCache(messageBody)
+    .then((translatedText) => {
+      if (!translationActive) {
+        return
+      }
+      if (!translatedText) {
+        logLine('translation', 'whisper not delivered, the translator returned nothing for: ' + messageBody.slice(0, 60))
+        return
+      }
+      logLine('translation', 'whisper translated: ' + messageBody.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
+      writeWhisperTranslationInbox(prefixRaw, messageRaw, translatedText)
+    })
+    .catch((error) => {
+      logLine('translation', 'whisper translation failed for: ' + messageBody.slice(0, 60) + ' error: ' + String(error))
+    })
+  return true
+}
+
+function handlePrivateMessageRelayLine(line: string): boolean {
+  const match = PRIVATE_MESSAGE_RELAY_LINE_PATTERN.exec(line)
+  if (!match) {
+    return false
+  }
+  const relayCounter = parseInt(match[1], 10)
+  if (relayCounter === lastPrivateMessageRelayCounter) {
+    return true
+  }
+  lastPrivateMessageRelayCounter = relayCounter
+  const conversationName = decodeRelayField(match[2]).replace(COLOR_CODE_PATTERN, '').trim()
+  const prefixRaw = decodeRelayField(match[4])
+  const messageRaw = decodeRelayField(match[5])
+  const messageBody = messageRaw.replace(COLOR_CODE_PATTERN, '').trim()
+  if (messageBody === '') {
+    logLine(
+      'translation',
+      'private message skipped, the message was empty after removing colour codes, conversation ' + conversationName
+    )
+    return true
+  }
+  if (!needsTranslation(messageBody)) {
+    logLine('translation', 'private message skipped, no translation needed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  const now = Date.now()
+  const duplicateKey = prefixRaw + '|' + messageRaw
+  const previousTime = recentPrivateMessageTimes.get(duplicateKey)
+  if (previousTime !== undefined && now - previousTime < DUPLICATE_WINDOW_MILLISECONDS) {
+    logLine('translation', 'private message duplicate suppressed: ' + messageBody.slice(0, 60))
+    return true
+  }
+  recentPrivateMessageTimes.set(duplicateKey, now)
+  forgetStaleTimes(recentPrivateMessageTimes, now)
+  logLine('translation', 'private message translating with ' + conversationName + ': ' + messageBody.slice(0, 60))
+  translateWithCache(messageBody)
+    .then((translatedText) => {
+      if (!translationActive) {
+        return
+      }
+      if (!translatedText) {
+        logLine(
+          'translation',
+          'private message not delivered, the translator returned nothing for: ' + messageBody.slice(0, 60)
+        )
+        return
+      }
+      logLine('translation', 'private message translated: ' + messageBody.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
+      writePrivateMessageTranslationInbox(prefixRaw, messageRaw, translatedText)
+    })
+    .catch((error) => {
+      logLine(
+        'translation',
+        'private message translation failed for: ' + messageBody.slice(0, 60) + ' error: ' + String(error)
+      )
+    })
+  return true
+}
+
 function handleDebugOutputLine(_processId: number, line: string): void {
   const applyMatch = /HONCHATSTANDALONEAPPLY\|(\d+)/.exec(line)
   if (applyMatch) {
     const sequence = parseInt(applyMatch[1], 10)
-    const writeTime = inboxWriteTimes.get(sequence)
-    if (writeTime !== undefined) {
+    const writeRecord = inboxWriteTimes.get(sequence)
+    if (writeRecord !== undefined) {
       inboxWriteTimes.delete(sequence)
-      logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeTime) + 'ms')
+      logLine('translation', 'game applied sequence ' + sequence + ' after ' + (Date.now() - writeRecord.time) + 'ms')
+      noteDeliveryConfirmed()
     }
     dropAppliedInboxEntry(sequence)
   }
   if (line.includes('HONCHATSENT|')) {
     dropSentChatInboxEntries()
+    noteDeliveryConfirmed()
   }
-  const missedMatch = /HONCHANDELIVERED\|0|HONCHATDELIVERED\|0/.exec(line)
-  if (missedMatch) {
-    retryLastDelivery()
+  const deliveredMatch = /HON(?:CHAT|CHAN|WHISPER|IM)DELIVERED\|(\d+)/.exec(line)
+  if (deliveredMatch) {
+    if (parseInt(deliveredMatch[1], 10) > 0) {
+      noteDeliveryConfirmed()
+    } else {
+      retryLastDelivery()
+    }
   }
-  if (line.includes('HONCHA')) {
+  if (line.includes('HONCHA') || line.includes('HONWHISPER') || line.includes('HONIM')) {
     if (!sawAnyRelayLine) {
       sawAnyRelayLine = true
       logLine('translation', 'first relay line received, the game side is alive')
+      reportHealthChange()
     }
     logLine('relay', line)
   }
   if (handleChannelRelayLine(line)) {
+    return
+  }
+  if (handleWhisperRelayLine(line)) {
+    return
+  }
+  if (handlePrivateMessageRelayLine(line)) {
     return
   }
   const match = RELAY_LINE_PATTERN.exec(line)
@@ -1161,16 +1727,23 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
     'session started, target language ' + targetLanguage + ', ' + (gameProcess ? 'attached to launched game' : 'standalone, game was already running')
   )
   sawAnyRelayLine = false
+  resetHealthCounters()
+  reportHealthChange()
   relayWatchdogTimer = setTimeout(() => {
     if (translationActive && !sawAnyRelayLine) {
       logLine(
         'translation',
         'no relay lines from the game after 90 seconds. The game side is not talking. Check that the game was launched modded through the manager and that chat translation was enabled before the launch'
       )
+      reportHealthChange()
     }
   }, 90000)
   lastRelayCounter = 0
   lastChannelRelayCounter = 0
+  lastWhisperRelayCounter = 0
+  lastPrivateMessageRelayCounter = 0
+  recentWhisperTimes.clear()
+  recentPrivateMessageTimes.clear()
   chatInboxSequence = Date.now() % 1000000000
   channelInboxSequence = chatInboxSequence
   pendingDuplicateText = ''
@@ -1201,6 +1774,7 @@ export function stopThaiChatTranslation(): void {
   }
   translationActive = false
   logLine('translation', 'session stopped')
+  reportHealthChange()
   if (relayWatchdogTimer) {
     clearTimeout(relayWatchdogTimer)
     relayWatchdogTimer = null

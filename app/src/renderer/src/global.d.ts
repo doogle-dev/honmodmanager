@@ -58,7 +58,31 @@ interface ModManagerApi {
   openTranslationCacheFolder: () => Promise<boolean>
   openLogsFolder: () => Promise<boolean>
   openTranslationLog: () => Promise<boolean>
+  startLogTail: (logName: LogName) => Promise<{ lines: string[]; filePath: string }>
+  stopLogTail: () => Promise<boolean>
+  onLogTailAppend: (listener: (lines: string[]) => void) => void
+  getTranslationHealth: () => Promise<TranslationHealth>
+  onTranslationHealth: (listener: (health: TranslationHealth) => void) => void
   onChatComposeShown: (listener: () => void) => void
+}
+
+type LogName = 'translation' | 'manager'
+
+type TranslationHealthStatus = 'off' | 'idle' | 'waiting' | 'listening' | 'healthy' | 'degraded' | 'failing'
+
+interface TranslationHealth {
+  status: TranslationHealthStatus
+  detailKey: string
+  detailParams: Record<string, string | number>
+  sessionActive: boolean
+  relaySeen: boolean
+  translatedCount: number
+  failedCount: number
+  consecutiveFailures: number
+  lastFailureReason: string
+  lastSuccessAt: number
+  lastFailureAt: number
+  coolingDownProviders: string[]
 }
 
 interface ChatTranslationMessage {

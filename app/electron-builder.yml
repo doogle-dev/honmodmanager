@@ -4,6 +4,7 @@ directories:
   buildResources: build
 files:
   - out/**
+  - resources/**
   - package.json
 publish:
   provider: github
