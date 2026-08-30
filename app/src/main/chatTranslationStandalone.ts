@@ -59,7 +59,7 @@ const STANDALONE_SCRIPT_LINES = [
   'end',
   '',
   'function translator.announce(message)',
-  '\tpcall(function() Echo(message) end)',
+  "\tpcall(function() Echo('[HoN Mod Manager] ' .. message) end)",
   'end',
   '',
   'function ChatTranslatorApply(sequenceNumber, applyCallback)',
