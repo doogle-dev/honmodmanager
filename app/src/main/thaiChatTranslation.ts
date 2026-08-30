@@ -45,7 +45,7 @@ const CHAT_RELAY_HOOK_BODY = [
   '\t\t\tend',
   '\t\t\treturn table.concat(output)',
   '\t\tend',
-  "\t\tEcho('HONCHATRELAY|' .. tostring(ChatTranslatorRelayCounter) .. '|' .. tostring(messageType) .. '|' .. relayEncode(tostring(senderName or '')) .. '|' .. relayEncode(relayText))",
+  "\t\tEcho('[HoN Mod Manager] HONCHATRELAY|' .. tostring(ChatTranslatorRelayCounter) .. '|' .. tostring(messageType) .. '|' .. relayEncode(tostring(senderName or '')) .. '|' .. relayEncode(relayText))",
   '\tend)'
 ].join('\n')
 
@@ -110,7 +110,7 @@ const CHAT_DEFINITIONS_BODY = [
   '\t\t\tGameChat.TransferChatTable(GameChat, currentLine, 0)',
   '\t\t\tGameChat:UpdateChatScroller()',
   '\t\tend',
-  "\t\tEcho('HONCHATDELIVERED|' .. tostring(replacedCount))",
+  "\t\tEcho('[HoN Mod Manager] HONCHATDELIVERED|' .. tostring(replacedCount))",
   '\tend)',
   'end',
   '',
@@ -123,7 +123,7 @@ const CHAT_DEFINITIONS_BODY = [
   '\t\telse',
   '\t\t\tAllChat(messageText)',
   '\t\tend',
-  "\t\tEcho('HONCHATSENT|' .. tostring(channelName))",
+  "\t\tEcho('[HoN Mod Manager] HONCHATSENT|' .. tostring(channelName))",
   '\tend)',
   'end',
   '',
@@ -132,7 +132,7 @@ const CHAT_DEFINITIONS_BODY = [
   '\tif ChatTranslatorFrameCount % 20 ~= 0 then return end',
   '\tif ChatTranslatorPollAnnounced == nil then',
   '\t\tChatTranslatorPollAnnounced = true',
-  "\t\tpcall(function() Echo('HONCHATPOLLALIVE') end)",
+  "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHATPOLLALIVE') end)",
   '\tend',
   '\tpcall(function()',
   "\t\tlocal inboxFileName = 'ChatTranslatorInbox.lua'",
@@ -188,7 +188,7 @@ const CHAT_DEFINITIONS_BODY = [
   '\t\t\tGameChat.TransferChatTable(GameChat, currentLine, 0)',
   '\t\t\tGameChat:UpdateChatScroller()',
   '\t\tend',
-  "\t\tEcho('HONWHISPERDELIVERED|' .. tostring(replacedCount))",
+  "\t\tEcho('[HoN Mod Manager] HONWHISPERDELIVERED|' .. tostring(replacedCount))",
   '\tend)',
   'end',
   ''
@@ -206,7 +206,7 @@ const WHISPER_RELAY_HOOK_BODY = [
   "\t\tlocal whisperMessage = tostring(whisperEntry.message or '')",
   "\t\tif whisperMessage == '' then return end",
   '\t\tChatWhisperRelayCounter = (ChatWhisperRelayCounter or 0) + 1',
-  "\t\tEcho('HONWHISPERRELAY|' .. tostring(ChatWhisperRelayCounter) .. '|' .. ChatTranslatorEncode(tostring(senderName or '')) .. '|' .. ChatTranslatorEncode(whisperPrefix) .. '|' .. ChatTranslatorEncode(whisperMessage))",
+  "\t\tEcho('[HoN Mod Manager] HONWHISPERRELAY|' .. tostring(ChatWhisperRelayCounter) .. '|' .. ChatTranslatorEncode(tostring(senderName or '')) .. '|' .. ChatTranslatorEncode(whisperPrefix) .. '|' .. ChatTranslatorEncode(whisperMessage))",
   '\tend)'
 ].join('\n')
 
@@ -289,7 +289,7 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\t\tif replacedCount > 0 then',
   '\t\t\tpcall(function() Communicator:ReloadChannel() end)',
   '\t\tend',
-  "\t\tEcho('HONCHANDELIVERED|' .. tostring(replacedCount))",
+  "\t\tEcho('[HoN Mod Manager] HONCHANDELIVERED|' .. tostring(replacedCount))",
   '\tend)',
   'end',
   '',
@@ -306,7 +306,7 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\tif ChannelTranslatorFrameCount % 20 ~= 0 then return end',
   '\tif ChannelTranslatorPollAnnounced == nil then',
   '\t\tChannelTranslatorPollAnnounced = true',
-  "\t\tpcall(function() Echo('HONCHANPOLLALIVE') end)",
+  "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHANPOLLALIVE') end)",
   '\tend',
   '\tpcall(function()',
   "\t\tlocal inboxFileName = 'ChannelTranslatorInbox.lua'",
@@ -333,9 +333,9 @@ const CHANNEL_DEFINITIONS_BODY = [
   '\t\tend)',
   '\tend',
   '\tif ChannelTranslatorPollAttached then',
-  "\t\tpcall(function() Echo('HONCHANPOLLATTACHED') end)",
+  "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHANPOLLATTACHED') end)",
   '\telse',
-  "\t\tpcall(function() Echo('HONCHANPOLLFAILED') end)",
+  "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHANPOLLFAILED') end)",
   '\tend',
   'end',
   '',
@@ -351,7 +351,7 @@ const CHANNEL_RELAY_HOOK_BODY = [
   "\t\tlocal relayContent = tostring(prefix or '') .. tostring(message or '')",
   "\t\tif relayContent == '' then return end",
   '\t\tChannelTranslatorRelayCounter = (ChannelTranslatorRelayCounter or 0) + 1',
-  "\t\tEcho('HONCHANRELAY|' .. tostring(ChannelTranslatorRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(channelName or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(tostring(message or '')))",
+  "\t\tEcho('[HoN Mod Manager] HONCHANRELAY|' .. tostring(ChannelTranslatorRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(channelName or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(tostring(message or '')))",
   '\tend)'
 ].join('\n')
 
@@ -380,7 +380,7 @@ const SOCIAL_IM_DEFINITIONS_BODY = [
   '\t\tif replacedCount > 0 then',
   '\t\t\tpcall(function() Social_IM:RefreshCurrentChat() end)',
   '\t\tend',
-  "\t\tEcho('HONIMDELIVERED|' .. tostring(replacedCount))",
+  "\t\tEcho('[HoN Mod Manager] HONIMDELIVERED|' .. tostring(replacedCount))",
   '\tend)',
   'end',
   ''
@@ -395,7 +395,7 @@ const SOCIAL_IM_RELAY_HOOK_BODY = [
   "\t\t\tlocal privateMessage = tostring(message or '')",
   "\t\t\tif privateMessage == '' then return end",
   '\t\t\tSocialImRelayCounter = (SocialImRelayCounter or 0) + 1',
-  "\t\t\tEcho('HONIMRELAY|' .. tostring(SocialImRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(name or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(privateMessage))",
+  "\t\t\tEcho('[HoN Mod Manager] HONIMRELAY|' .. tostring(SocialImRelayCounter) .. '|' .. ChannelTranslatorEncode(tostring(name or '')) .. '|' .. ChannelTranslatorEncode(tostring(sender or '')) .. '|' .. ChannelTranslatorEncode(tostring(prefix or '')) .. '|' .. ChannelTranslatorEncode(privateMessage))",
   '\t\tend)'
 ].join('\n')
 

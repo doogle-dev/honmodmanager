@@ -5,7 +5,7 @@ import taskbarAlertIconPath from '../../resources/taskbar_alert.png?asset'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
 import { spawn } from 'child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, cpSync, statSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } from 'fs'
 import {
   locateJuvioRoot,
   baseArchivePath,
@@ -114,108 +114,6 @@ const DEV_UPDATE_CHANNEL = 'dev'
 
 function isDevChannelBuild(): boolean {
   return app.getName().endsWith('-dev')
-}
-
-const MOD_SETTINGS_PROFILE_NAME = 'mods'
-const REAL_SETTINGS_PROFILE_NAME = 'Heroes of Newerth'
-const SETTINGS_FILE_NAMES = ['startup.cfg', 'game_settings_local.cfg', 'voice_config.cfg']
-const LOGIN_FILE_NAME = 'login.cfg'
-
-function findJuvioDocumentsRoot(): string | null {
-  const candidates = [
-    join(app.getPath('documents'), 'Juvio'),
-    join(app.getPath('home'), 'Documents', 'Juvio'),
-    join(app.getPath('home'), 'OneDrive', 'Documents', 'Juvio')
-  ]
-  for (const candidate of candidates) {
-    if (existsSync(join(candidate, REAL_SETTINGS_PROFILE_NAME))) {
-      return candidate
-    }
-  }
-  return null
-}
-
-const LOGIN_CVAR_PATTERN = /^\s*SetSave\s+"login_/
-
-function readUtf16ConfigLines(filePath: string): string[] {
-  return readFileSync(filePath)
-    .toString('utf16le')
-    .replace(/^﻿/, '')
-    .split(/\r?\n/)
-}
-
-function writeUtf16ConfigLines(filePath: string, configLines: string[]): void {
-  const content = configLines.filter((line) => line !== '').join('\r\n') + '\r\n'
-  writeFileSync(filePath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(content, 'utf16le')]))
-}
-
-function transplantLoginCvars(sourcePath: string, targetPath: string): void {
-  if (!existsSync(sourcePath) || !existsSync(targetPath)) {
-    return
-  }
-  const sourceLoginLines = readUtf16ConfigLines(sourcePath).filter((line) => LOGIN_CVAR_PATTERN.test(line))
-  const targetLines = readUtf16ConfigLines(targetPath).filter((line) => !LOGIN_CVAR_PATTERN.test(line))
-  writeUtf16ConfigLines(targetPath, [...targetLines, ...sourceLoginLines])
-}
-
-function synchronizeSettingsFile(realFilePath: string, modFilePath: string): void {
-  const realExists = existsSync(realFilePath)
-  const modExists = existsSync(modFilePath)
-  if (realExists && !modExists) {
-    copyFileSync(realFilePath, modFilePath)
-  } else if (modExists && !realExists) {
-    copyFileSync(modFilePath, realFilePath)
-  } else if (realExists && modExists) {
-    if (statSync(realFilePath).mtimeMs >= statSync(modFilePath).mtimeMs) {
-      copyFileSync(realFilePath, modFilePath)
-    } else {
-      copyFileSync(modFilePath, realFilePath)
-    }
-  }
-}
-
-function synchronizeSettingsProfiles(): void {
-  const documentsRoot = findJuvioDocumentsRoot()
-  if (!documentsRoot) {
-    return
-  }
-  const realProfileDirectory = join(documentsRoot, REAL_SETTINGS_PROFILE_NAME)
-  const modProfileDirectory = join(documentsRoot, MOD_SETTINGS_PROFILE_NAME)
-  if (!existsSync(realProfileDirectory)) {
-    return
-  }
-  mkdirSync(modProfileDirectory, { recursive: true })
-  for (const settingsFileName of SETTINGS_FILE_NAMES) {
-    synchronizeSettingsFile(join(realProfileDirectory, settingsFileName), join(modProfileDirectory, settingsFileName))
-  }
-  const realLoginPath = join(realProfileDirectory, LOGIN_FILE_NAME)
-  if (existsSync(realLoginPath)) {
-    copyFileSync(realLoginPath, join(modProfileDirectory, LOGIN_FILE_NAME))
-  }
-  transplantLoginCvars(join(realProfileDirectory, 'startup.cfg'), join(modProfileDirectory, 'startup.cfg'))
-  const realBindings = join(realProfileDirectory, 'bindings')
-  const modBindings = join(modProfileDirectory, 'bindings')
-  if (existsSync(realBindings) && !existsSync(modBindings)) {
-    cpSync(realBindings, modBindings, { recursive: true })
-  }
-}
-
-function copyLoginBackToRealProfile(): void {
-  const documentsRoot = findJuvioDocumentsRoot()
-  if (!documentsRoot) {
-    return
-  }
-  const modLoginPath = join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, LOGIN_FILE_NAME)
-  const realLoginPath = join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, LOGIN_FILE_NAME)
-  if (existsSync(modLoginPath)) {
-    copyFileSync(modLoginPath, realLoginPath)
-  }
-  for (const settingsFileName of SETTINGS_FILE_NAMES) {
-    const modSettingsPath = join(documentsRoot, MOD_SETTINGS_PROFILE_NAME, settingsFileName)
-    if (existsSync(modSettingsPath)) {
-      copyFileSync(modSettingsPath, join(documentsRoot, REAL_SETTINGS_PROFILE_NAME, settingsFileName))
-    }
-  }
 }
 
 function focusGameWindowWhenReady(): void {
@@ -374,7 +272,6 @@ function resumeTranslationSessionIfGameRunning(): void {
 
 function performModdedLaunch(): ReturnType<typeof launchGame> {
   logLine('launch', 'modded launch requested, chat translation enabled: ' + String(loadChatTranslationSettings().enabled))
-  synchronizeSettingsProfiles()
   const translationSettings = loadChatTranslationSettings()
   const gameProcess = launchGame(
     locateJuvioRoot(),
@@ -386,8 +283,7 @@ function performModdedLaunch(): ReturnType<typeof launchGame> {
   }
   startWardUpOverlay()
   whenGameFullyExits(gameProcess, () => {
-    logLine('launch', 'game exited, syncing login back to real profile')
-    copyLoginBackToRealProfile()
+    logLine('launch', 'game exited')
     stopWardUpOverlay()
   })
   focusGameWindowWhenReady()
