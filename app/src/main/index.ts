@@ -8,6 +8,9 @@ import { spawn } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } from 'fs'
 import {
   locateJuvioRoot,
+  detectJuvioRoot,
+  setJuvioRootOverride,
+  normalizeChosenJuvioRoot,
   baseArchivePath,
   modsOverlayArchivePath,
   launchGame,
@@ -186,6 +189,32 @@ function saveChatTranslationSettings(enabled: boolean, targetLanguage: 'en' | 't
 
 function saveChatTranslationEnabled(enabled: boolean): void {
   saveChatTranslationSettings(enabled, loadChatTranslationSettings().targetLanguage)
+}
+
+function gameFolderSettingsPath(): string {
+  return join(app.getPath('userData'), 'game-folder.json')
+}
+
+function loadChosenGameFolder(): string | null {
+  try {
+    const stored = JSON.parse(readFileSync(gameFolderSettingsPath(), 'utf8'))
+    return typeof stored.juvioRoot === 'string' && stored.juvioRoot ? stored.juvioRoot : null
+  } catch {
+    return null
+  }
+}
+
+function saveChosenGameFolder(juvioRoot: string | null): void {
+  if (juvioRoot) {
+    writeFileSync(gameFolderSettingsPath(), JSON.stringify({ juvioRoot }, null, 2))
+  } else if (existsSync(gameFolderSettingsPath())) {
+    rmSync(gameFolderSettingsPath())
+  }
+  setJuvioRootOverride(juvioRoot)
+}
+
+function gameFolderInfo(): { path: string | null; isCustom: boolean } {
+  return { path: detectJuvioRoot(), isCustom: loadChosenGameFolder() !== null }
 }
 
 function loadEnabledFileNames(): string[] {
@@ -527,6 +556,32 @@ function registerInterProcessHandlers(): void {
     return { added: addedCount }
   })
 
+  ipcMain.handle('gameFolder:get', () => gameFolderInfo())
+
+  ipcMain.handle('gameFolder:choose', async () => {
+    const selection = await dialog.showOpenDialog({
+      title: 'Choose the Heroes of Newerth (Juvio) install folder',
+      properties: ['openDirectory']
+    })
+    if (selection.canceled || selection.filePaths.length === 0) {
+      return { ...gameFolderInfo(), chosen: false, invalid: false }
+    }
+    const juvioRoot = normalizeChosenJuvioRoot(selection.filePaths[0])
+    if (!juvioRoot) {
+      logLine('app', 'chosen game folder has no bin\\juvio.exe: ' + selection.filePaths[0])
+      return { ...gameFolderInfo(), chosen: false, invalid: true }
+    }
+    saveChosenGameFolder(juvioRoot)
+    logLine('app', 'game folder set manually to ' + juvioRoot)
+    return { ...gameFolderInfo(), chosen: true, invalid: false }
+  })
+
+  ipcMain.handle('gameFolder:reset', () => {
+    saveChosenGameFolder(null)
+    logLine('app', 'game folder reset to automatic detection')
+    return gameFolderInfo()
+  })
+
   ipcMain.handle('logs:open', () => {
     shell.openPath(logsDirectory())
     return true
@@ -804,6 +859,8 @@ app.whenReady().then(() => {
   logLine('app', 'manager started, version ' + app.getVersion() + (app.isPackaged ? ' packaged' : ' dev'))
   process.on('uncaughtException', (error) => logLine('error', 'uncaught exception: ' + String(error)))
   process.on('unhandledRejection', (reason) => logLine('error', 'unhandled rejection: ' + String(reason)))
+  setJuvioRootOverride(loadChosenGameFolder())
+  logLine('app', 'game folder: ' + (detectJuvioRoot() ?? 'not found'))
   registerInterProcessHandlers()
   registerChatComposeHandlers()
   if (startupLaunchFlag) {

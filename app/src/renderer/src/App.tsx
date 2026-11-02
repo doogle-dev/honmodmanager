@@ -182,6 +182,8 @@ function App(): JSX.Element {
   const [catalogFromCache, setCatalogFromCache] = useState(false)
   const [shortcutStatusMessage, setShortcutStatusMessage] = useState('')
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
+  const [gameFolder, setGameFolder] = useState<GameFolderInfo | null>(null)
+  const [gameFolderInvalid, setGameFolderInvalid] = useState(false)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
   const [translationHealth, setTranslationHealth] = useState<TranslationHealth | null>(null)
   const [logViewOpen, setLogViewOpen] = useState(false)
@@ -235,6 +237,7 @@ function App(): JSX.Element {
         'Heroes of Newerth Reborn Mod Manager' + (appInfo.isDevBuild ? ' Dev' : '') + ' v' + appInfo.version
     })
     window.modManager.getTranslationCacheInfo().then(setCacheInfo)
+    window.modManager.getGameFolder().then(setGameFolder)
     window.modManager.setChatTranslationLanguage(loadUiLanguage())
     window.modManager.getTranslationHealth().then(setTranslationHealth)
     window.modManager.onTranslationHealth(setTranslationHealth)
@@ -291,6 +294,17 @@ function App(): JSX.Element {
     } catch (error) {
       setShortcutStatusMessage('Shortcut creation failed: ' + String(error))
     }
+  }
+
+  async function chooseGameFolder(): Promise<void> {
+    const result = await window.modManager.chooseGameFolder()
+    setGameFolder(result)
+    setGameFolderInvalid(result.invalid)
+  }
+
+  async function resetGameFolder(): Promise<void> {
+    setGameFolder(await window.modManager.resetGameFolder())
+    setGameFolderInvalid(false)
   }
 
   async function checkForUpdates(): Promise<void> {
@@ -1004,6 +1018,42 @@ function App(): JSX.Element {
 
               <section className="space-y-3">
                 <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{t('systemSection')}</h2>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('gameFolder')}</h3>
+                      <p className="text-slate-400">{t('gameFolderDescription')}</p>
+                      {gameFolder && (
+                        <p className={'mt-3 break-all ' + (gameFolder.path ? 'text-slate-400' : 'text-[#e08a8a]')}>
+                          {gameFolder.path
+                            ? gameFolder.path +
+                              ' (' +
+                              t(gameFolder.isCustom ? 'gameFolderChosenManually' : 'gameFolderDetected') +
+                              ')'
+                            : t('gameFolderNotFound')}
+                        </p>
+                      )}
+                      {gameFolderInvalid && <p className="mt-2 text-[#e08a8a]">{t('gameFolderInvalid')}</p>}
+                    </div>
+                    <div className="flex w-[168px] shrink-0 flex-col gap-2">
+                      <button
+                        onClick={chooseGameFolder}
+                        className="rounded-md bg-[#35753a] px-3 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                      >
+                        {t('chooseGameFolder')}
+                      </button>
+                      {gameFolder?.isCustom && (
+                        <button
+                          onClick={resetGameFolder}
+                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-normal text-slate-300 hover:bg-white/10"
+                        >
+                          {t('resetGameFolder')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                   <div className="flex items-start justify-between gap-6">

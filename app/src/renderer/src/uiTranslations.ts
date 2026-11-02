@@ -75,6 +75,23 @@ const translations: Record<string, { en: string; th: string }> = {
     en: 'Shortcut creation failed. Try running the manager as administrator.',
     th: 'สร้างทางลัดไม่สำเร็จ ลองเปิดตัวจัดการม็อดแบบผู้ดูแลระบบ'
   },
+  gameFolder: { en: 'Game Folder', th: 'โฟลเดอร์เกม' },
+  gameFolderDescription: {
+    en: 'The Juvio install folder the manager applies mods to and launches the game from. It is found automatically, but if you installed the game somewhere unusual you can choose it here.',
+    th: 'โฟลเดอร์ติดตั้ง Juvio ที่ตัวจัดการม็อดใช้ใส่ม็อดและเปิดเกม ปกติจะหาเจอเอง แต่ถ้าคุณติดตั้งเกมไว้ที่อื่น สามารถเลือกเองได้ที่นี่'
+  },
+  gameFolderNotFound: {
+    en: 'The game folder was not found. Choose the folder you installed Juvio into.',
+    th: 'ไม่พบโฟลเดอร์เกม เลือกโฟลเดอร์ที่คุณติดตั้ง Juvio ไว้'
+  },
+  gameFolderChosenManually: { en: 'Chosen manually', th: 'เลือกเอง' },
+  gameFolderDetected: { en: 'Found automatically', th: 'ตรวจพบอัตโนมัติ' },
+  gameFolderInvalid: {
+    en: 'That folder does not contain bin\\juvio.exe. Choose the Juvio install folder.',
+    th: 'โฟลเดอร์นั้นไม่มี bin\\juvio.exe เลือกโฟลเดอร์ที่ติดตั้ง Juvio'
+  },
+  chooseGameFolder: { en: 'Choose Folder', th: 'เลือกโฟลเดอร์' },
+  resetGameFolder: { en: 'Use Automatic', th: 'ใช้แบบอัตโนมัติ' },
   translationCache: { en: 'Translation Cache', th: 'แคชคำแปล' },
   translationCacheDescription: {
     en: 'Chat translations are saved locally so repeated messages never call the translation service twice. The cache clears itself automatically if it grows past 20 MB.',
