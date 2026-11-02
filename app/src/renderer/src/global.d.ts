@@ -56,6 +56,9 @@ interface ModManagerApi {
   getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
   clearTranslationCache: () => Promise<boolean>
   openTranslationCacheFolder: () => Promise<boolean>
+  getGameFolder: () => Promise<GameFolderInfo>
+  chooseGameFolder: () => Promise<GameFolderInfo & { chosen: boolean; invalid: boolean }>
+  resetGameFolder: () => Promise<GameFolderInfo>
   openLogsFolder: () => Promise<boolean>
   openTranslationLog: () => Promise<boolean>
   startLogTail: (logName: LogName) => Promise<{ lines: string[]; filePath: string }>
@@ -64,6 +67,11 @@ interface ModManagerApi {
   getTranslationHealth: () => Promise<TranslationHealth>
   onTranslationHealth: (listener: (health: TranslationHealth) => void) => void
   onChatComposeShown: (listener: () => void) => void
+}
+
+interface GameFolderInfo {
+  path: string | null
+  isCustom: boolean
 }
 
 type LogName = 'translation' | 'manager'
