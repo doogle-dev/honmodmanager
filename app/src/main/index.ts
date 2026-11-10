@@ -30,6 +30,7 @@ import {
 } from './thaiChatTranslation'
 import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
 import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
+import { copyVanillaSettingsToModdedProfile } from './profileSettings'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory, translationLogPath } from './managerLogger'
 import { startLogTail, stopLogTail } from './logTail'
@@ -580,6 +581,21 @@ function registerInterProcessHandlers(): void {
     saveChosenGameFolder(null)
     logLine('app', 'game folder reset to automatic detection')
     return gameFolderInfo()
+  })
+
+  ipcMain.handle('profileSettings:copy', async () => {
+    // The game rewrites its settings files while running and again on exit, which would undo the copy.
+    const gameRunning = await new Promise<boolean>((resolveRunning) => isGameProcessRunning(resolveRunning))
+    if (gameRunning) {
+      return { status: 'gameRunning' }
+    }
+    const copiedEntryNames = copyVanillaSettingsToModdedProfile()
+    if (!copiedEntryNames) {
+      logLine('app', 'profile settings copy found no normal game profile')
+      return { status: 'notFound' }
+    }
+    logLine('app', 'copied profile settings to the modded profile: ' + copiedEntryNames.join(', '))
+    return { status: 'copied' }
   })
 
   ipcMain.handle('logs:open', () => {

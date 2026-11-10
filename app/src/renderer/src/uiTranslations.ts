@@ -92,6 +92,25 @@ const translations: Record<string, { en: string; th: string }> = {
   },
   chooseGameFolder: { en: 'Choose Folder', th: 'เลือกโฟลเดอร์' },
   resetGameFolder: { en: 'Use Automatic', th: 'ใช้แบบอัตโนมัติ' },
+  profileSettings: { en: 'Game Settings', th: 'การตั้งค่าเกม' },
+  profileSettingsDescription: {
+    en: 'The modded game keeps its own settings, keybindings and saved login, separate from the normal game, so it starts out like a fresh install. This copies them over from the normal game, replacing what the modded game has now. Close the game first. Nothing is copied automatically, so press it again whenever you want the modded game to catch up.',
+    th: 'เกมแบบม็อดเก็บการตั้งค่า ปุ่มลัด และการล็อกอินที่บันทึกไว้แยกจากเกมปกติ จึงเริ่มต้นเหมือนเพิ่งติดตั้งใหม่ ปุ่มนี้จะคัดลอกทั้งหมดจากเกมปกติมาแทนที่ของเกมแบบม็อด ปิดเกมก่อนกดปุ่มนี้ ระบบจะไม่คัดลอกให้อัตโนมัติ กดอีกครั้งเมื่อต้องการให้เกมแบบม็อดใช้การตั้งค่าล่าสุด'
+  },
+  copyProfileSettings: { en: 'Copy Settings', th: 'คัดลอกการตั้งค่า' },
+  profileSettingsCopied: {
+    en: 'Settings, keybindings and login were copied to the modded game.',
+    th: 'คัดลอกการตั้งค่า ปุ่มลัด และการล็อกอินไปยังเกมแบบม็อดแล้ว'
+  },
+  profileSettingsGameRunning: {
+    en: 'The game is running. Close it, then try again.',
+    th: 'เกมกำลังเปิดอยู่ ปิดเกมก่อนแล้วลองอีกครั้ง'
+  },
+  profileSettingsNotFound: {
+    en: 'No settings from the normal game were found. Launch the game without mods once, then try again.',
+    th: 'ไม่พบการตั้งค่าจากเกมปกติ เปิดเกมแบบไม่มีม็อดหนึ่งครั้งแล้วลองอีกครั้ง'
+  },
+  profileSettingsFailed: { en: 'Copying settings failed: {error}', th: 'คัดลอกการตั้งค่าไม่สำเร็จ: {error}' },
   translationCache: { en: 'Translation Cache', th: 'แคชคำแปล' },
   translationCacheDescription: {
     en: 'Chat translations are saved locally so repeated messages never call the translation service twice. The cache clears itself automatically if it grows past 20 MB.',

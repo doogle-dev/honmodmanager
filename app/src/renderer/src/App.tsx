@@ -184,6 +184,7 @@ function App(): JSX.Element {
   const [cacheInfo, setCacheInfo] = useState<{ entryCount: number; sizeBytes: number } | null>(null)
   const [gameFolder, setGameFolder] = useState<GameFolderInfo | null>(null)
   const [gameFolderInvalid, setGameFolderInvalid] = useState(false)
+  const [profileSettingsMessage, setProfileSettingsMessage] = useState<{ text: string; failed: boolean } | null>(null)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
   const [translationHealth, setTranslationHealth] = useState<TranslationHealth | null>(null)
   const [logViewOpen, setLogViewOpen] = useState(false)
@@ -305,6 +306,21 @@ function App(): JSX.Element {
   async function resetGameFolder(): Promise<void> {
     setGameFolder(await window.modManager.resetGameFolder())
     setGameFolderInvalid(false)
+  }
+
+  async function copyProfileSettings(): Promise<void> {
+    try {
+      const result = await window.modManager.copyProfileSettings()
+      if (result.status === 'copied') {
+        setProfileSettingsMessage({ text: t('profileSettingsCopied'), failed: false })
+      } else if (result.status === 'gameRunning') {
+        setProfileSettingsMessage({ text: t('profileSettingsGameRunning'), failed: true })
+      } else {
+        setProfileSettingsMessage({ text: t('profileSettingsNotFound'), failed: true })
+      }
+    } catch (error) {
+      setProfileSettingsMessage({ text: t('profileSettingsFailed', { error: String(error) }), failed: true })
+    }
   }
 
   async function checkForUpdates(): Promise<void> {
@@ -1052,6 +1068,26 @@ function App(): JSX.Element {
                         </button>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('profileSettings')}</h3>
+                      <p className="text-slate-400">{t('profileSettingsDescription')}</p>
+                      {profileSettingsMessage && (
+                        <p className={'mt-3 ' + (profileSettingsMessage.failed ? 'text-[#e08a8a]' : 'text-slate-400')}>
+                          {profileSettingsMessage.text}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={copyProfileSettings}
+                      className="shrink-0 rounded-md bg-[#35753a] px-4 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                    >
+                      {t('copyProfileSettings')}
+                    </button>
                   </div>
                 </div>
 
