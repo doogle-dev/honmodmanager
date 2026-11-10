@@ -76,6 +76,7 @@ const modManagerApi = {
   getGameFolder: () => ipcRenderer.invoke('gameFolder:get'),
   chooseGameFolder: () => ipcRenderer.invoke('gameFolder:choose'),
   resetGameFolder: () => ipcRenderer.invoke('gameFolder:reset'),
+  copyProfileSettings: () => ipcRenderer.invoke('profileSettings:copy'),
   openLogsFolder: () => ipcRenderer.invoke('logs:open'),
   openTranslationLog: () => ipcRenderer.invoke('logs:openTranslation'),
   startLogTail: (logName: string): Promise<{ lines: string[]; filePath: string }> =>

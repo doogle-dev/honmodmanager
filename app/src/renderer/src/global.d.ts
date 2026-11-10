@@ -59,6 +59,7 @@ interface ModManagerApi {
   getGameFolder: () => Promise<GameFolderInfo>
   chooseGameFolder: () => Promise<GameFolderInfo & { chosen: boolean; invalid: boolean }>
   resetGameFolder: () => Promise<GameFolderInfo>
+  copyProfileSettings: () => Promise<{ status: 'copied' | 'gameRunning' | 'notFound' }>
   openLogsFolder: () => Promise<boolean>
   openTranslationLog: () => Promise<boolean>
   startLogTail: (logName: LogName) => Promise<{ lines: string[]; filePath: string }>
