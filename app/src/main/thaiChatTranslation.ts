@@ -195,7 +195,7 @@ const CHAT_DEFINITIONS_BODY = [
 ].join('\n')
 
 const WHISPER_RELAY_ANCHOR =
-  "\ttable.insert(GameChat.gameChat,  { messageType = messageType, soundMessageType = messageType, channel = '', prefix = prefix, message = message, sender = sender, entity = '', hosttime = hosttime, playerIndex = '', team = 1, senderName = senderName, userTag = userTag, isBuddy = isBuddy, isMe = isMe} )"
+  "\ttable.insert(GameChat.gameChat,  { messageType = messageType, soundMessageType = messageType, channel = '', prefix = prefix, message = message, sender = sender, entity = '', hosttime = hosttime, playerIndex = '', team = 1, senderName = senderName, senderId = sender, userTag = userTag, isBuddy = isBuddy, isMe = isMe} )"
 
 const WHISPER_RELAY_HOOK_BODY = [
   '\tpcall(function()',
