@@ -47,10 +47,6 @@ interface ModManagerApi {
   getChatTranslationEnabled: () => Promise<boolean>
   setChatTranslationEnabled: (enabled: boolean) => Promise<boolean>
   onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => void
-  translateForChatCompose: (englishText: string) => Promise<{ thaiText: string; backTranslation: string }>
-  sendComposedChat: (thaiText: string, channelName: string) => Promise<boolean>
-  closeChatCompose: () => Promise<boolean>
-  getChatComposeMode: () => Promise<string>
   setChatTranslationLanguage: (language: string) => Promise<boolean>
   createDesktopShortcuts: () => Promise<{ vanillaCreated: boolean; moddedCreated: boolean }>
   getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
@@ -67,7 +63,6 @@ interface ModManagerApi {
   onLogTailAppend: (listener: (lines: string[]) => void) => void
   getTranslationHealth: () => Promise<TranslationHealth>
   onTranslationHealth: (listener: (health: TranslationHealth) => void) => void
-  onChatComposeShown: (listener: () => void) => void
 }
 
 interface GameFolderInfo {
