@@ -403,6 +403,13 @@ const SOCIAL_IM_RELAY_HOOK_BODY = [
   '\t\tend)'
 ].join('\n')
 
+// A private message (IM) is sent by Social_IM:SendChatMessage. The hook leaves a chat muted
+// player's line to the game's own path, which tells them why it was not sent.
+const SOCIAL_IM_SEND_ANCHOR = 'function Social_IM:SendChatMessage(chatbox, target)'
+
+const SOCIAL_IM_SEND_HOOK_BODY =
+  '\tif not chatMuted and ChatTranslatorImOutgoing and ChatTranslatorImOutgoing(chatbox, target) then return end'
+
 export const chatRelayLuaEdits = [
   {
     targetPath: 'ui/scripts/fe3/communicator.lua',
@@ -448,6 +455,11 @@ export const chatRelayLuaEdits = [
     targetPath: 'ui/scripts/fe3/social_im.lua',
     find: SOCIAL_IM_RELAY_ANCHOR,
     replace: SOCIAL_IM_RELAY_ANCHOR + '\n' + SOCIAL_IM_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_SEND_ANCHOR,
+    replace: SOCIAL_IM_SEND_ANCHOR + '\n' + SOCIAL_IM_SEND_HOOK_BODY
   },
   {
     targetPath: 'ui/game_chat.interface',
@@ -698,12 +710,10 @@ function queueOutgoingInboxLine(outgoingId: string, luaCall: string): void {
 
 function noticeLuaCall(noticeText: string, outgoingId: string): string {
   const noticeEncoded = Buffer.from(noticeText, 'utf8').toString('base64')
-  return (
-    "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "', '" + outgoingId.charAt(0) + "') end"
-  )
+  return "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "', '" + outgoingId + "') end"
 }
 
-type OutgoingChannel = 'team' | 'all' | 'channel'
+type OutgoingChannel = 'team' | 'all' | 'channel' | 'im'
 
 function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: OutgoingChannel, noticeText: string): void {
   if (!translationActive) {
@@ -1325,7 +1335,7 @@ function createOverlayWindow(): void {
   overlayWindow = window
 }
 
-const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel)\|([A-Za-z0-9+/=]*)/
+const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel|im)\|([A-Za-z0-9+/=]*)/
 const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
 const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
 const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|([gl]\d+)/

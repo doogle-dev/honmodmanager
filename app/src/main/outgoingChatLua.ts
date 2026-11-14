@@ -10,15 +10,17 @@
 // Communicator:SendChat in communicator.lua. Each line's id starts with the box it came from, g or
 // l, so the manager can write the send back into the inbox that side of the game polls.
 //
-// A line typed in a chat channel is held with the channel's name, and the game sends the
-// translation back to that channel itself, so the manager only ever sees the kind: team, all or
-// channel.
+// A line typed in a chat channel is held with the channel's name, and a private message (IM) with
+// its text box and recipient, and the game sends the translation back to that channel or person
+// itself, so the manager only ever sees the kind: team, all, channel or im. IMs come from
+// Social_IM:SendChatMessage in social_im.lua, on the same main menu side as the channels.
 export const OUTGOING_FALLBACK_MILLISECONDS = 5000
 
 export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: string): string {
   return [
     'ChatTranslatorOutgoingPending = ChatTranslatorOutgoingPending or {}',
     'ChatTranslatorOutgoingCounters = ChatTranslatorOutgoingCounters or {}',
+    'ChatTranslatorOutgoingTargets = ChatTranslatorOutgoingTargets or {}',
     '',
     'function ChatTranslatorAnnounce(message)',
     "\tpcall(function() Echo('[HoN Mod Manager] ' .. message) end)",
@@ -42,12 +44,15 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
       '(messageText))',
     '\tChatTranslatorOutgoingCounters[sourceTag] = count',
     '\tChatTranslatorOutgoingPending[outgoingId] = { text = messageText, channel = channelName, channelTarget = channelTarget, queuedAt = queuedAt }',
-    "\tif sourceTag == 'l' then ChatTranslatorLastLobbyChannel = channelTarget or 'Game' end",
+    '\tChatTranslatorOutgoingTargets[outgoingId] = { kind = channelName, target = channelTarget }',
     '\treturn true',
     'end',
     '',
     'function ChatTranslatorSendText(messageText, channelName, channelTarget)',
-    "\tif channelName == 'channel' then",
+    "\tif channelName == 'im' then",
+    "\t\tlocal escapedText = string.gsub(string.gsub(messageText, '\\\\', '\\\\\\\\'), \"'\", \"\\\\'\")",
+    "\t\tchannelTarget.box:UICmd(\"ChatSendIM('\" .. channelTarget.name .. \"', '\" .. escapedText .. \"');\")",
+    "\telseif channelName == 'channel' then",
     '\t\tChatSendMessage(messageText, channelTarget)',
     "\telseif channelName == 'team' then",
     '\t\tTeamChat(messageText)',
@@ -97,6 +102,21 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\treturn intercepted',
     'end',
     '',
+    'function ChatTranslatorImOutgoing(chatbox, target)',
+    '\tlocal intercepted = false',
+    '\tpcall(function()',
+    '\t\tlocal ctrlDown = ChatTranslatorModifiers()',
+    '\t\tif not ctrlDown then return end',
+    "\t\tlocal messageText = tostring(chatbox:GetValue() or '')",
+    "\t\tif ChatTranslatorHold('l', messageText, 'im', { box = chatbox, name = tostring(target) }) then",
+    '\t\t\tchatbox:Clear()',
+    '\t\t\tchatbox:SetFocus(1)',
+    '\t\t\tintercepted = true',
+    '\t\tend',
+    '\tend)',
+    '\treturn intercepted',
+    'end',
+    '',
     'function ChatTranslatorSend(encodedText, channelName, outgoingId)',
     '\tpcall(function()',
     '\t\tlocal messageText = ' + decodeFunctionName + '(encodedText)',
@@ -112,18 +132,22 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\t\t\tchannelName = pending.channel',
     '\t\t\tchannelTarget = pending.channelTarget',
     '\t\tend',
-    "\t\tif channelName == 'channel' and channelTarget == nil then return end",
+    "\t\tif (channelName == 'channel' or channelName == 'im') and channelTarget == nil then return end",
     '\t\tChatTranslatorSendText(messageText, channelName, channelTarget)',
     "\t\tChatTranslatorAnnounce('HONCHATSENT|' .. tostring(channelName) .. '|' .. tostring(outgoingId or 0))",
     '\tend)',
     'end',
     '',
-    'function ChatTranslatorNotice(encodedText, sourceTag)',
+    'function ChatTranslatorNotice(encodedText, outgoingId)',
     '\tpcall(function()',
     '\t\tlocal noticeText = ' + decodeFunctionName + '(encodedText)',
     "\t\tif noticeText == '' then return end",
-    "\t\tif sourceTag == 'l' then",
-    "\t\t\tCommunicator:AddMessage(ChatTranslatorLastLobbyChannel or 'Game', '^458[T]^* ' .. noticeText, '', '')",
+    '\t\tlocal outgoingTarget = ChatTranslatorOutgoingTargets[outgoingId] or {}',
+    '\t\tChatTranslatorOutgoingTargets[outgoingId] = nil',
+    "\t\tif outgoingTarget.kind == 'im' then",
+    "\t\t\tSocial_IM:AddChatEntry(outgoingTarget.target.name, '^458[T]^* ' .. noticeText, '', 2, '')",
+    "\t\telseif string.sub(tostring(outgoingId), 1, 1) == 'l' then",
+    "\t\t\tCommunicator:AddMessage(outgoingTarget.kind == 'channel' and outgoingTarget.target or 'Game', '^458[T]^* ' .. noticeText, '', '')",
     '\t\telse',
     "\t\t\tGameChat:AllChatMessages('3', nil, '^458[T]^* ' .. noticeText, nil, nil, nil, 'false')",
     '\t\tend',
