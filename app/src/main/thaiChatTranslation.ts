@@ -703,7 +703,9 @@ function noticeLuaCall(noticeText: string, outgoingId: string): string {
   )
 }
 
-function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: 'team' | 'all', noticeText: string): void {
+type OutgoingChannel = 'team' | 'all' | 'channel'
+
+function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: OutgoingChannel, noticeText: string): void {
   if (!translationActive) {
     return
   }
@@ -1323,7 +1325,7 @@ function createOverlayWindow(): void {
   overlayWindow = window
 }
 
-const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all)\|([A-Za-z0-9+/=]*)/
+const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel)\|([A-Za-z0-9+/=]*)/
 const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
 const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
 const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|([gl]\d+)/
@@ -1366,7 +1368,7 @@ function handleOutgoingChatLine(line: string): boolean {
     return false
   }
   const outgoingId = match[1]
-  const channelName = match[2] === 'all' ? 'all' : 'team'
+  const channelName = match[2] as OutgoingChannel
   const messageText = decodeRelayField(match[3]).trim()
   const receivedAt = Date.now()
   const duplicateKey = outgoingId + '|' + messageText
