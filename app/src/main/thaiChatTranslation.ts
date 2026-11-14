@@ -299,7 +299,8 @@ const CHANNEL_DEFINITIONS_BODY = [
   '',
   'function ChannelTranslatorPoll()',
   '\tChannelTranslatorFrameCount = (ChannelTranslatorFrameCount or 0) + 1',
-  '\tif ChannelTranslatorFrameCount % 20 ~= 0 then return end',
+  '\tlocal outgoingWaiting = ChatTranslatorOutgoingWaiting and ChatTranslatorOutgoingWaiting()',
+  '\tif ChannelTranslatorFrameCount % (outgoingWaiting and 2 or 20) ~= 0 then return end',
   '\tif ChannelTranslatorPollAnnounced == nil then',
   '\t\tChannelTranslatorPollAnnounced = true',
   "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHANPOLLALIVE') end)",
@@ -313,6 +314,7 @@ const CHANNEL_DEFINITIONS_BODY = [
   "\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
   '\t\tend',
   '\tend)',
+  '\tif outgoingWaiting then pcall(ChatTranslatorCheckOutgoing) end',
   'end',
   '',
   'function ChannelTranslatorAttachPoll()',
@@ -337,7 +339,13 @@ const CHANNEL_DEFINITIONS_BODY = [
   '',
   'ChannelTranslatorAttachPoll()',
   ''
-].join('\n')
+].join('\n') + '\n' + outgoingChatLua('ChannelTranslatorEncode', 'ChannelTranslatorDecode')
+
+// The lobby and hero pick chat box sends through Communicator:SendChat, which calls TeamChat and
+// AllChat itself without passing through GameChat:ChatCommand, so it needs its own hook.
+const COMMUNICATOR_SEND_ANCHOR = 'function Communicator:SendChat()'
+
+const COMMUNICATOR_SEND_HOOK_BODY = '\tif ChatTranslatorLobbyOutgoing and ChatTranslatorLobbyOutgoing() then return end'
 
 const CHANNEL_RELAY_ANCHOR = 'function Communicator:AddMessage(channelName, prefix, message, sender)'
 
@@ -405,6 +413,11 @@ export const chatRelayLuaEdits = [
     targetPath: 'ui/scripts/fe3/communicator.lua',
     find: CHANNEL_RELAY_ANCHOR,
     replace: CHANNEL_RELAY_ANCHOR + '\n' + CHANNEL_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/communicator.lua',
+    find: COMMUNICATOR_SEND_ANCHOR,
+    replace: COMMUNICATOR_SEND_ANCHOR + '\n' + COMMUNICATOR_SEND_HOOK_BODY
   },
   {
     targetPath: 'ui/scripts/game/chat.lua',
@@ -647,11 +660,13 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
   logLine('translation', 'chat inbox written, sequence ' + chatInboxSequence + ', pending entries ' + chatInboxEntries.length)
 }
 
-function queueChannelInboxLine(luaCall: string): void {
-  lastDelivery =
-    lastDelivery && lastDelivery.luaCall === luaCall
-      ? lastDelivery
-      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
+function queueChannelInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
+  if (retryWhenMissed) {
+    lastDelivery =
+      lastDelivery && lastDelivery.luaCall === luaCall
+        ? lastDelivery
+        : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
+  }
   pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
   inboxWriteTimes.set(channelInboxSequence, { time: Date.now(), kind: 'channel' })
@@ -668,15 +683,27 @@ function writeTranslationInbox(originalRelayText: string, translatedText: string
   queueChatInboxLine("if ChatTranslatorDeliver then ChatTranslatorDeliver('" + originalEncoded + "', '" + translatedEncoded + "') end")
 }
 
-const outgoingSendCalls = new Map<number, string>()
-const outgoingSentAsTyped = new Set<number>()
+const outgoingSendCalls = new Map<string, string>()
+const outgoingSentAsTyped = new Set<string>()
 
-function noticeLuaCall(noticeText: string): string {
-  const noticeEncoded = Buffer.from(noticeText, 'utf8').toString('base64')
-  return "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "') end"
+// A line held by the lobby chat box (id l...) goes back through the channel inbox, which the
+// always present frontend panel polls. A line from the in-match box (id g...) uses the chat inbox.
+function queueOutgoingInboxLine(outgoingId: string, luaCall: string): void {
+  if (outgoingId.startsWith('l')) {
+    queueChannelInboxLine(luaCall, false)
+  } else {
+    queueChatInboxLine(luaCall, false)
+  }
 }
 
-function writeOutgoingSendInbox(outgoingId: number, messageText: string, channelName: 'team' | 'all', noticeText: string): void {
+function noticeLuaCall(noticeText: string, outgoingId: string): string {
+  const noticeEncoded = Buffer.from(noticeText, 'utf8').toString('base64')
+  return (
+    "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "', '" + outgoingId.charAt(0) + "') end"
+  )
+}
+
+function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: 'team' | 'all', noticeText: string): void {
   if (!translationActive) {
     return
   }
@@ -686,17 +713,17 @@ function writeOutgoingSendInbox(outgoingId: number, messageText: string, channel
   }
   const textEncoded = Buffer.from(messageText, 'utf8').toString('base64')
   let luaCall =
-    "if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "', " + outgoingId + ') end'
+    "if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "', '" + outgoingId + "') end"
   if (noticeText) {
-    luaCall += ' ' + noticeLuaCall(noticeText)
+    luaCall += ' ' + noticeLuaCall(noticeText, outgoingId)
   }
   outgoingSendCalls.set(outgoingId, luaCall)
-  queueChatInboxLine(luaCall, false)
+  queueOutgoingInboxLine(outgoingId, luaCall)
 }
 
 // Once the game has sent a line, or skipped it because it already went out as typed, its inbox
 // entry goes so a game interface reload cannot run it again.
-function dropOutgoingInboxEntry(outgoingId: number): void {
+function dropOutgoingInboxEntry(outgoingId: string): void {
   const luaCall = outgoingSendCalls.get(outgoingId)
   if (luaCall === undefined) {
     return
@@ -1296,10 +1323,10 @@ function createOverlayWindow(): void {
   overlayWindow = window
 }
 
-const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|(\d+)\|(team|all)\|([A-Za-z0-9+/=]*)/
-const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|(\d+)/
-const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|(\d+)/
-const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|(\d+)/
+const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all)\|([A-Za-z0-9+/=]*)/
+const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
+const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
+const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|([gl]\d+)/
 
 // The player is waiting on this line, so a provider that does not answer hands over to the next
 // one far sooner than for incoming chat. If they are all slow the game sends the line as typed.
@@ -1338,7 +1365,7 @@ function handleOutgoingChatLine(line: string): boolean {
   if (!match) {
     return false
   }
-  const outgoingId = parseInt(match[1], 10)
+  const outgoingId = match[1]
   const channelName = match[2] === 'all' ? 'all' : 'team'
   const messageText = decodeRelayField(match[3]).trim()
   const receivedAt = Date.now()
@@ -1391,13 +1418,13 @@ function handleOutgoingChatLine(line: string): boolean {
 function handleOutgoingSettledLine(line: string): void {
   const sentMatch = OUTGOING_SENT_PATTERN.exec(line)
   if (sentMatch) {
-    dropOutgoingInboxEntry(parseInt(sentMatch[1], 10))
+    dropOutgoingInboxEntry(sentMatch[1])
     noteDeliveryConfirmed()
     return
   }
   const lateMatch = OUTGOING_LATE_PATTERN.exec(line)
   if (lateMatch) {
-    const outgoingId = parseInt(lateMatch[1], 10)
+    const outgoingId = lateMatch[1]
     logLine('compose', 'the game had already sent outgoing chat ' + outgoingId + ' as typed, its translation arrived late')
     dropOutgoingInboxEntry(outgoingId)
     noteDeliveryConfirmed()
@@ -1405,7 +1432,7 @@ function handleOutgoingSettledLine(line: string): void {
   }
   const fallbackMatch = OUTGOING_FALLBACK_PATTERN.exec(line)
   if (fallbackMatch) {
-    const outgoingId = parseInt(fallbackMatch[1], 10)
+    const outgoingId = fallbackMatch[1]
     logLine(
       'compose',
       'no translation reached the game within ' + OUTGOING_FALLBACK_MILLISECONDS + 'ms, it sent outgoing chat ' + outgoingId + ' as typed'
@@ -1413,7 +1440,7 @@ function handleOutgoingSettledLine(line: string): void {
     if (!outgoingSendCalls.has(outgoingId)) {
       outgoingSentAsTyped.add(outgoingId)
     }
-    queueChatInboxLine(noticeLuaCall(OUTGOING_NOTICES.tooSlow[translationTargetLanguage]), false)
+    queueOutgoingInboxLine(outgoingId, noticeLuaCall(OUTGOING_NOTICES.tooSlow[translationTargetLanguage], outgoingId))
     return
   }
   if (line.includes('HONCHATNOTICE|')) {

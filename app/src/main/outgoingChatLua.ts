@@ -1,34 +1,78 @@
-// Ctrl+Enter in the game's own chat box hands the typed line to the manager instead of sending it,
-// to the channel the box is in. Ctrl+Shift+Enter sends it to all chat, matching Shift+Enter in the game.
-// The chat box closes at once like a normal send, the manager translates the line and writes it
-// back through the inbox, and the game sends the translated text. The game keeps each line until
-// that happens, and sends it as typed if the manager has not answered in time (the manager closed,
-// or every provider is slow), so a line is never lost.
+// Ctrl+Enter in one of the game's own chat boxes hands the typed line to the manager instead of
+// sending it, to the channel the box is in. Ctrl+Shift+Enter sends it to all chat, matching
+// Shift+Enter in the game. The box clears at once like a normal send, the manager translates the
+// line and writes it back through an inbox, and the game sends the translated text. The game keeps
+// each line until that happens, and sends it as typed if the manager has not answered in time (the
+// manager closed, or every provider is slow), so a line is never lost.
+//
+// There are two chat boxes. The in-match box sends through GameChat:ChatCommand in chat.lua, and
+// the lobby and hero pick box sends through Communicator:SendChat in communicator.lua. Each line's
+// id starts with the box it came from, g or l, so the manager can write the send back into the
+// inbox that side of the game polls.
 export const OUTGOING_FALLBACK_MILLISECONDS = 5000
 
 export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: string): string {
   return [
     'ChatTranslatorOutgoingPending = ChatTranslatorOutgoingPending or {}',
+    'ChatTranslatorOutgoingCounters = ChatTranslatorOutgoingCounters or {}',
     '',
     'function ChatTranslatorAnnounce(message)',
     "\tpcall(function() Echo('[HoN Mod Manager] ' .. message) end)",
     'end',
     '',
+    'function ChatTranslatorModifiers()',
+    '\tlocal ctrlDown = false',
+    '\tlocal shiftDown = false',
+    '\tpcall(function() ctrlDown = Input.IsCtrlDown() and true or false end)',
+    '\tpcall(function() shiftDown = Input.IsShiftDown() and true or false end)',
+    '\treturn ctrlDown, shiftDown',
+    'end',
+    '',
+    'function ChatTranslatorHold(sourceTag, messageText, channelName)',
+    "\tif string.find(messageText, '^%s*$') or string.find(messageText, '^%s*/') then return false end",
+    '\tlocal queuedAt = GetTime()',
+    '\tlocal count = (ChatTranslatorOutgoingCounters[sourceTag] or 0) + 1',
+    '\tlocal outgoingId = sourceTag .. tostring(count)',
+    "\tEcho('[HoN Mod Manager] HONCHATOUTGOING|' .. outgoingId .. '|' .. channelName .. '|' .. " +
+      encodeFunctionName +
+      '(messageText))',
+    '\tChatTranslatorOutgoingCounters[sourceTag] = count',
+    '\tChatTranslatorOutgoingPending[outgoingId] = { text = messageText, channel = channelName, queuedAt = queuedAt }',
+    '\treturn true',
+    'end',
+    '',
     'function ChatTranslatorOutgoing(inputText)',
     '\tlocal intercepted = false',
     '\tpcall(function()',
-    '\t\tif not (Input and Input.IsCtrlDown and Input.IsCtrlDown()) then return end',
-    "\t\tlocal messageText = tostring(inputText or '')",
-    "\t\tif string.find(messageText, '^%s*$') or string.find(messageText, '^%s*/') then return end",
+    '\t\tlocal ctrlDown, shiftDown = ChatTranslatorModifiers()',
+    '\t\tif not ctrlDown then return end',
     "\t\tlocal channelName = 'team'",
-    "\t\tif (Input.IsShiftDown and Input.IsShiftDown()) or (GameChat and GameChat.lastType == 'all') then channelName = 'all' end",
-    '\t\tlocal queuedAt = GetTime()',
-    '\t\tlocal outgoingId = (ChatTranslatorOutgoingCounter or 0) + 1',
-    '\t\tlocal encodedText = ' + encodeFunctionName + '(messageText)',
-    "\t\tEcho('[HoN Mod Manager] HONCHATOUTGOING|' .. tostring(outgoingId) .. '|' .. channelName .. '|' .. encodedText)",
-    '\t\tChatTranslatorOutgoingCounter = outgoingId',
-    '\t\tChatTranslatorOutgoingPending[outgoingId] = { text = messageText, channel = channelName, queuedAt = queuedAt }',
-    '\t\tintercepted = true',
+    "\t\tif shiftDown or (GameChat and GameChat.lastType == 'all') then channelName = 'all' end",
+    "\t\tintercepted = ChatTranslatorHold('g', tostring(inputText or ''), channelName)",
+    '\tend)',
+    '\treturn intercepted',
+    'end',
+    '',
+    'function ChatTranslatorLobbyOutgoing()',
+    '\tlocal intercepted = false',
+    '\tpcall(function()',
+    '\t\tlocal ctrlDown, shiftDown = ChatTranslatorModifiers()',
+    '\t\tif not ctrlDown then return end',
+    '\t\tlocal textBox = Communicator.chatTextBox',
+    "\t\tlocal messageText = tostring(textBox:GetInputLine() or '')",
+    "\t\tif messageText ~= '' then",
+    '\t\t\tlocal channelObject = Communicator.channelObjects[Communicator.selectedChannelId]',
+    "\t\t\tif not (channelObject and channelObject.channelName == 'Game') then return end",
+    '\t\telse',
+    '\t\t\ttextBox = Communicator.chatLobbyTextBox',
+    "\t\t\tmessageText = tostring(textBox:GetInputLine() or '')",
+    '\t\tend',
+    "\t\tlocal channelName = 'team'",
+    "\t\tif shiftDown or Communicator.currentChatType == Communicator.chatType.ALL_CHAT then channelName = 'all' end",
+    "\t\tif ChatTranslatorHold('l', messageText, channelName) then",
+    "\t\t\ttextBox:SetInputLine('')",
+    '\t\t\tintercepted = true',
+    '\t\tend',
     '\tend)',
     '\treturn intercepted',
     'end',
@@ -53,11 +97,15 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\tend)',
     'end',
     '',
-    'function ChatTranslatorNotice(encodedText)',
+    'function ChatTranslatorNotice(encodedText, sourceTag)',
     '\tpcall(function()',
     '\t\tlocal noticeText = ' + decodeFunctionName + '(encodedText)',
     "\t\tif noticeText == '' then return end",
-    "\t\tGameChat:AllChatMessages('3', nil, '^458[T]^* ' .. noticeText, nil, nil, nil, 'false')",
+    "\t\tif sourceTag == 'l' then",
+    "\t\t\tCommunicator:AddMessage('Game', '^458[T]^* ' .. noticeText, '', '')",
+    '\t\telse',
+    "\t\t\tGameChat:AllChatMessages('3', nil, '^458[T]^* ' .. noticeText, nil, nil, nil, 'false')",
+    '\t\tend',
     "\t\tChatTranslatorAnnounce('HONCHATNOTICE|1')",
     '\tend)',
     'end',
