@@ -1,10 +1,11 @@
-import { BrowserWindow, app, globalShortcut, ipcMain, screen, shell } from 'electron'
-import { ChildProcess, spawn } from 'child_process'
+import { BrowserWindow, app, ipcMain, screen, shell } from 'electron'
+import { ChildProcess } from 'child_process'
 import { join } from 'path'
 import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { startDebugOutputListener, stopDebugOutputListener } from './gameDebugOutputListener'
 import { whenGameFullyExits } from './juvioLauncher'
 import { logLine } from './managerLogger'
+import { OUTGOING_FALLBACK_MILLISECONDS, outgoingChatLua } from './outgoingChatLua'
 
 export const CHAT_RELAY_CONSOLE_COMMAND = 'Set con_debugOutput true'
 
@@ -114,22 +115,10 @@ const CHAT_DEFINITIONS_BODY = [
   '\tend)',
   'end',
   '',
-  'function ChatTranslatorSend(encodedText, channelName)',
-  '\tpcall(function()',
-  '\t\tlocal messageText = ChatTranslatorDecode(encodedText)',
-  "\t\tif messageText == '' then return end",
-  "\t\tif channelName == 'team' then",
-  '\t\t\tTeamChat(messageText)',
-  '\t\telse',
-  '\t\t\tAllChat(messageText)',
-  '\t\tend',
-  "\t\tEcho('[HoN Mod Manager] HONCHATSENT|' .. tostring(channelName))",
-  '\tend)',
-  'end',
-  '',
   'function ChatTranslatorPoll()',
   '\tChatTranslatorFrameCount = (ChatTranslatorFrameCount or 0) + 1',
-  '\tif ChatTranslatorFrameCount % 20 ~= 0 then return end',
+  '\tlocal outgoingWaiting = ChatTranslatorOutgoingWaiting and ChatTranslatorOutgoingWaiting()',
+  '\tif ChatTranslatorFrameCount % (outgoingWaiting and 2 or 20) ~= 0 then return end',
   '\tif ChatTranslatorPollAnnounced == nil then',
   '\t\tChatTranslatorPollAnnounced = true',
   "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHATPOLLALIVE') end)",
@@ -143,6 +132,7 @@ const CHAT_DEFINITIONS_BODY = [
   "\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
   '\t\tend',
   '\tend)',
+  '\tif outgoingWaiting then pcall(ChatTranslatorCheckOutgoing) end',
   'end',
   '',
   "ChatTranslatorAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'",
@@ -192,7 +182,13 @@ const CHAT_DEFINITIONS_BODY = [
   '\tend)',
   'end',
   ''
-].join('\n')
+].join('\n') + '\n' + outgoingChatLua('ChatTranslatorEncode', 'ChatTranslatorDecode')
+
+// Every Enter in the game chat box runs through GameChat:ChatCommand, and the game only sends
+// the line when it returns true, so returning false here is what holds a Ctrl+Enter line back.
+const CHAT_COMMAND_ANCHOR = 'function GameChat:ChatCommand(inputText)'
+
+const CHAT_COMMAND_HOOK_BODY = '\tif ChatTranslatorOutgoing and ChatTranslatorOutgoing(inputText) then return false end'
 
 const WHISPER_RELAY_ANCHOR =
   "\ttable.insert(GameChat.gameChat,  { messageType = messageType, soundMessageType = messageType, channel = '', prefix = prefix, message = message, sender = sender, entity = '', hosttime = hosttime, playerIndex = '', team = 1, senderName = senderName, senderId = sender, userTag = userTag, isBuddy = isBuddy, isMe = isMe} )"
@@ -303,7 +299,8 @@ const CHANNEL_DEFINITIONS_BODY = [
   '',
   'function ChannelTranslatorPoll()',
   '\tChannelTranslatorFrameCount = (ChannelTranslatorFrameCount or 0) + 1',
-  '\tif ChannelTranslatorFrameCount % 20 ~= 0 then return end',
+  '\tlocal outgoingWaiting = ChatTranslatorOutgoingWaiting and ChatTranslatorOutgoingWaiting()',
+  '\tif ChannelTranslatorFrameCount % (outgoingWaiting and 2 or 20) ~= 0 then return end',
   '\tif ChannelTranslatorPollAnnounced == nil then',
   '\t\tChannelTranslatorPollAnnounced = true',
   "\t\tpcall(function() Echo('[HoN Mod Manager] HONCHANPOLLALIVE') end)",
@@ -317,6 +314,7 @@ const CHANNEL_DEFINITIONS_BODY = [
   "\t\t\tpcall(function() runfile('~/' .. inboxFileName) end)",
   '\t\tend',
   '\tend)',
+  '\tif outgoingWaiting then pcall(ChatTranslatorCheckOutgoing) end',
   'end',
   '',
   'function ChannelTranslatorAttachPoll()',
@@ -341,7 +339,13 @@ const CHANNEL_DEFINITIONS_BODY = [
   '',
   'ChannelTranslatorAttachPoll()',
   ''
-].join('\n')
+].join('\n') + '\n' + outgoingChatLua('ChannelTranslatorEncode', 'ChannelTranslatorDecode')
+
+// The lobby and hero pick chat box sends through Communicator:SendChat, which calls TeamChat and
+// AllChat itself without passing through GameChat:ChatCommand, so it needs its own hook.
+const COMMUNICATOR_SEND_ANCHOR = 'function Communicator:SendChat()'
+
+const COMMUNICATOR_SEND_HOOK_BODY = '\tif ChatTranslatorLobbyOutgoing and ChatTranslatorLobbyOutgoing() then return end'
 
 const CHANNEL_RELAY_ANCHOR = 'function Communicator:AddMessage(channelName, prefix, message, sender)'
 
@@ -399,6 +403,13 @@ const SOCIAL_IM_RELAY_HOOK_BODY = [
   '\t\tend)'
 ].join('\n')
 
+// A private message (IM) is sent by Social_IM:SendChatMessage. The hook leaves a chat muted
+// player's line to the game's own path, which tells them why it was not sent.
+const SOCIAL_IM_SEND_ANCHOR = 'function Social_IM:SendChatMessage(chatbox, target)'
+
+const SOCIAL_IM_SEND_HOOK_BODY =
+  '\tif not chatMuted and ChatTranslatorImOutgoing and ChatTranslatorImOutgoing(chatbox, target) then return end'
+
 export const chatRelayLuaEdits = [
   {
     targetPath: 'ui/scripts/fe3/communicator.lua',
@@ -409,6 +420,11 @@ export const chatRelayLuaEdits = [
     targetPath: 'ui/scripts/fe3/communicator.lua',
     find: CHANNEL_RELAY_ANCHOR,
     replace: CHANNEL_RELAY_ANCHOR + '\n' + CHANNEL_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/communicator.lua',
+    find: COMMUNICATOR_SEND_ANCHOR,
+    replace: COMMUNICATOR_SEND_ANCHOR + '\n' + COMMUNICATOR_SEND_HOOK_BODY
   },
   {
     targetPath: 'ui/scripts/game/chat.lua',
@@ -426,6 +442,11 @@ export const chatRelayLuaEdits = [
     replace: WHISPER_RELAY_ANCHOR + '\n' + WHISPER_RELAY_HOOK_BODY
   },
   {
+    targetPath: 'ui/scripts/game/chat.lua',
+    find: CHAT_COMMAND_ANCHOR,
+    replace: CHAT_COMMAND_ANCHOR + '\n' + CHAT_COMMAND_HOOK_BODY
+  },
+  {
     targetPath: 'ui/scripts/fe3/social_im.lua',
     find: SOCIAL_IM_DEFINITIONS_ANCHOR,
     replace: SOCIAL_IM_DEFINITIONS_BODY + '\n' + SOCIAL_IM_DEFINITIONS_ANCHOR
@@ -434,6 +455,11 @@ export const chatRelayLuaEdits = [
     targetPath: 'ui/scripts/fe3/social_im.lua',
     find: SOCIAL_IM_RELAY_ANCHOR,
     replace: SOCIAL_IM_RELAY_ANCHOR + '\n' + SOCIAL_IM_RELAY_HOOK_BODY
+  },
+  {
+    targetPath: 'ui/scripts/fe3/social_im.lua',
+    find: SOCIAL_IM_SEND_ANCHOR,
+    replace: SOCIAL_IM_SEND_ANCHOR + '\n' + SOCIAL_IM_SEND_HOOK_BODY
   },
   {
     targetPath: 'ui/game_chat.interface',
@@ -628,14 +654,14 @@ function retryLastDelivery(): void {
   }, DELIVERY_RETRY_DELAY_MILLISECONDS)
 }
 
+// Sends and notices never answer with a replaced count, so they are not tracked for retry. They
+// leave lastDelivery alone, or a chat line sent mid retry would cancel another line's translation.
 function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
   if (retryWhenMissed) {
     lastDelivery =
       lastDelivery && lastDelivery.luaCall === luaCall
         ? lastDelivery
         : { kind: 'chat', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
-  } else {
-    lastDelivery = null
   }
   pruneUnconfirmedDeliveries()
   chatInboxSequence += 1
@@ -646,11 +672,13 @@ function queueChatInboxLine(luaCall: string, retryWhenMissed: boolean = true): v
   logLine('translation', 'chat inbox written, sequence ' + chatInboxSequence + ', pending entries ' + chatInboxEntries.length)
 }
 
-function queueChannelInboxLine(luaCall: string): void {
-  lastDelivery =
-    lastDelivery && lastDelivery.luaCall === luaCall
-      ? lastDelivery
-      : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
+function queueChannelInboxLine(luaCall: string, retryWhenMissed: boolean = true): void {
+  if (retryWhenMissed) {
+    lastDelivery =
+      lastDelivery && lastDelivery.luaCall === luaCall
+        ? lastDelivery
+        : { kind: 'channel', luaCall, attempts: 0, queuedAt: Date.now(), retryPending: false }
+  }
   pruneUnconfirmedDeliveries()
   channelInboxSequence += 1
   inboxWriteTimes.set(channelInboxSequence, { time: Date.now(), kind: 'channel' })
@@ -667,9 +695,53 @@ function writeTranslationInbox(originalRelayText: string, translatedText: string
   queueChatInboxLine("if ChatTranslatorDeliver then ChatTranslatorDeliver('" + originalEncoded + "', '" + translatedEncoded + "') end")
 }
 
-function writeChatSendInbox(thaiText: string, channelName: 'team' | 'all'): void {
-  const textEncoded = Buffer.from(thaiText, 'utf8').toString('base64')
-  queueChatInboxLine("if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "') end", false)
+const outgoingSendCalls = new Map<string, string>()
+const outgoingSentAsTyped = new Set<string>()
+
+// A line held by the lobby chat box (id l...) goes back through the channel inbox, which the
+// always present frontend panel polls. A line from the in-match box (id g...) uses the chat inbox.
+function queueOutgoingInboxLine(outgoingId: string, luaCall: string): void {
+  if (outgoingId.startsWith('l')) {
+    queueChannelInboxLine(luaCall, false)
+  } else {
+    queueChatInboxLine(luaCall, false)
+  }
+}
+
+function noticeLuaCall(noticeText: string, outgoingId: string): string {
+  const noticeEncoded = Buffer.from(noticeText, 'utf8').toString('base64')
+  return "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "', '" + outgoingId + "') end"
+}
+
+type OutgoingChannel = 'team' | 'all' | 'channel' | 'im'
+
+function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: OutgoingChannel, noticeText: string): void {
+  if (!translationActive) {
+    return
+  }
+  if (outgoingSentAsTyped.delete(outgoingId)) {
+    logLine('compose', 'outgoing chat ' + outgoingId + ' already went out as typed, dropping the late translation')
+    return
+  }
+  const textEncoded = Buffer.from(messageText, 'utf8').toString('base64')
+  let luaCall =
+    "if ChatTranslatorSend then ChatTranslatorSend('" + textEncoded + "', '" + channelName + "', '" + outgoingId + "') end"
+  if (noticeText) {
+    luaCall += ' ' + noticeLuaCall(noticeText, outgoingId)
+  }
+  outgoingSendCalls.set(outgoingId, luaCall)
+  queueOutgoingInboxLine(outgoingId, luaCall)
+}
+
+// Once the game has sent a line, or skipped it because it already went out as typed, its inbox
+// entry goes so a game interface reload cannot run it again.
+function dropOutgoingInboxEntry(outgoingId: string): void {
+  const luaCall = outgoingSendCalls.get(outgoingId)
+  if (luaCall === undefined) {
+    return
+  }
+  outgoingSendCalls.delete(outgoingId)
+  dropDeliveryInboxEntries(luaCall)
 }
 
 function dropAppliedInboxEntry(sequence: number): void {
@@ -683,15 +755,6 @@ function dropAppliedInboxEntry(sequence: number): void {
   channelInboxEntries = channelInboxEntries.filter((entry) => entry.sequence !== sequence)
   if (channelInboxEntries.length !== channelBefore) {
     rewriteInboxFile('ChannelTranslatorInbox.lua', 'ChannelTranslatorApply', channelInboxEntries)
-  }
-}
-
-function dropSentChatInboxEntries(): void {
-  const before = chatInboxEntries.length
-  chatInboxEntries = chatInboxEntries.filter((entry) => !entry.luaCall.includes('ChatTranslatorSend('))
-  if (chatInboxEntries.length !== before) {
-    rewriteInboxFile('ChatTranslatorInbox.lua', 'ChatTranslatorApply', chatInboxEntries)
-    logLine('translation', 'sent chat removed from the inbox so a reload cannot send it again')
   }
 }
 
@@ -1107,11 +1170,11 @@ const TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS = 5 * 60 * 1000
 type TranslationProvider = {
   name: string
   blockedUntil: number
-  translate: (messageText: string, targetLanguage: string) => Promise<string>
+  translate: (messageText: string, targetLanguage: string, timeoutMilliseconds: number) => Promise<string>
 }
 
-async function fetchTranslationJson(requestUrl: string): Promise<unknown> {
-  const response = await fetch(requestUrl, { signal: AbortSignal.timeout(TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS) })
+async function fetchTranslationJson(requestUrl: string, timeoutMilliseconds: number): Promise<unknown> {
+  const response = await fetch(requestUrl, { signal: AbortSignal.timeout(timeoutMilliseconds) })
   if (!response.ok) {
     throw new Error('HTTP ' + response.status)
   }
@@ -1126,12 +1189,13 @@ const translationProviders: TranslationProvider[] = [
   {
     name: 'translate.googleapis.com',
     blockedUntil: 0,
-    translate: async (messageText, targetLanguage) => {
+    translate: async (messageText, targetLanguage, timeoutMilliseconds) => {
       const payload = (await fetchTranslationJson(
         'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
           targetLanguage +
           '&dt=t&q=' +
-          encodeURIComponent(messageText)
+          encodeURIComponent(messageText),
+        timeoutMilliseconds
       )) as unknown[]
       const segments = Array.isArray(payload) && Array.isArray(payload[0]) ? (payload[0] as unknown[][]) : []
       return segments
@@ -1143,12 +1207,13 @@ const translationProviders: TranslationProvider[] = [
   {
     name: 'clients5.google.com',
     blockedUntil: 0,
-    translate: async (messageText, targetLanguage) => {
+    translate: async (messageText, targetLanguage, timeoutMilliseconds) => {
       const payload = (await fetchTranslationJson(
         'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=' +
           targetLanguage +
           '&q=' +
-          encodeURIComponent(messageText)
+          encodeURIComponent(messageText),
+        timeoutMilliseconds
       )) as unknown
       if (!Array.isArray(payload)) {
         throw new Error('unexpected response shape')
@@ -1162,14 +1227,15 @@ const translationProviders: TranslationProvider[] = [
   {
     name: 'api.mymemory.translated.net',
     blockedUntil: 0,
-    translate: async (messageText, targetLanguage) => {
+    translate: async (messageText, targetLanguage, timeoutMilliseconds) => {
       const payload = (await fetchTranslationJson(
         'https://api.mymemory.translated.net/get?q=' +
           encodeURIComponent(messageText) +
           '&langpair=' +
           sourceLanguageFor(targetLanguage) +
           '|' +
-          targetLanguage
+          targetLanguage,
+        timeoutMilliseconds
       )) as { responseStatus?: number; responseDetails?: string; responseData?: { translatedText?: string } }
       if (payload.responseStatus !== 200) {
         throw new Error('service status ' + payload.responseStatus + ' ' + (payload.responseDetails ?? ''))
@@ -1179,10 +1245,13 @@ const translationProviders: TranslationProvider[] = [
   }
 ]
 
-function describeTranslationFailure(error: unknown): string {
+function describeTranslationFailure(
+  error: unknown,
+  timeoutMilliseconds: number = TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS
+): string {
   const errorObject = error as { name?: string; message?: string; cause?: { code?: string; message?: string } }
   if (errorObject && errorObject.name === 'TimeoutError') {
-    return 'no response after ' + Math.round(TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS / 1000) + ' seconds'
+    return 'no response after ' + timeoutMilliseconds / 1000 + ' seconds'
   }
   if (errorObject && errorObject.cause && (errorObject.cause.code || errorObject.cause.message)) {
     return String(errorObject.cause.code || errorObject.cause.message)
@@ -1190,7 +1259,11 @@ function describeTranslationFailure(error: unknown): string {
   return errorObject && errorObject.message ? errorObject.message : String(error)
 }
 
-async function translateText(messageText: string, targetLanguage: string): Promise<string> {
+async function translateText(
+  messageText: string,
+  targetLanguage: string,
+  timeoutMilliseconds: number = TRANSLATION_REQUEST_TIMEOUT_MILLISECONDS
+): Promise<string> {
   const failures: string[] = []
   const now = Date.now()
   for (const provider of translationProviders) {
@@ -1200,11 +1273,11 @@ async function translateText(messageText: string, targetLanguage: string): Promi
     }
     const startedAt = Date.now()
     try {
-      const translatedText = await provider.translate(messageText, targetLanguage)
+      const translatedText = await provider.translate(messageText, targetLanguage, timeoutMilliseconds)
       logLine('translation', 'translated via ' + provider.name + ' in ' + (Date.now() - startedAt) + 'ms')
       return translatedText
     } catch (error) {
-      const reason = describeTranslationFailure(error)
+      const reason = describeTranslationFailure(error, timeoutMilliseconds)
       if (reason === 'HTTP 429') {
         provider.blockedUntil = Date.now() + TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS
         logLine('translation', 'provider ' + provider.name + ' rate limited this machine, HTTP 429 after ' + (Date.now() - startedAt) + 'ms, skipping it for ' + Math.round(TRANSLATION_PROVIDER_COOLDOWN_MILLISECONDS / 60000) + ' minutes')
@@ -1262,179 +1335,132 @@ function createOverlayWindow(): void {
   overlayWindow = window
 }
 
-let composeWindow: BrowserWindow | null = null
+const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel|im)\|([A-Za-z0-9+/=]*)/
+const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
+const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
+const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|([gl]\d+)/
 
-function createComposeWindow(): void {
-  if (composeWindow) {
-    return
+// The player is waiting on this line, so a provider that does not answer hands over to the next
+// one far sooner than for incoming chat. If they are all slow the game sends the line as typed.
+const OUTGOING_PROVIDER_TIMEOUT_MILLISECONDS = 1500
+
+const OUTGOING_NOTICES = {
+  untranslated: { en: 'Translation unavailable, sent as typed', th: 'แปลข้อความไม่ได้ ส่งตามที่พิมพ์แล้ว' },
+  tooSlow: { en: 'Translation took too long, sent as typed', th: 'แปลช้าเกินไป ส่งตามที่พิมพ์แล้ว' }
+}
+
+let lastOutgoingKey = ''
+let lastOutgoingAt = 0
+
+async function translateOutgoingChat(messageText: string, targetLanguage: 'en' | 'th'): Promise<string> {
+  loadPersistentCache()
+  const cacheKey = targetLanguage + '|' + messageText
+  const cached = persistentTranslationCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
   }
-  const workArea = screen.getPrimaryDisplay().workArea
-  const composeWidth = 520
-  const composeHeight = 226
-  const window = new BrowserWindow({
-    width: composeWidth,
-    height: composeHeight,
-    x: workArea.x + Math.round((workArea.width - composeWidth) / 2),
-    y: workArea.y + Math.round(workArea.height * 0.6),
-    frame: false,
-    transparent: true,
-    resizable: false,
-    skipTaskbar: true,
-    show: false,
-    alwaysOnTop: true,
-    hasShadow: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
-  window.setAlwaysOnTop(true, 'screen-saver')
-  const rendererDevServerUrl = process.env['ELECTRON_RENDERER_URL']
-  if (rendererDevServerUrl) {
-    window.loadURL(rendererDevServerUrl + '#chat-compose')
+  const translatedText = await translateText(messageText, targetLanguage, OUTGOING_PROVIDER_TIMEOUT_MILLISECONDS)
+  if (translatedText) {
+    persistentTranslationCache.set(cacheKey, translatedText)
+    scheduleCacheSave()
+    noteTranslationSuccess()
   } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'chat-compose' })
+    noteTranslationFailure('the translation service returned nothing')
   }
-  window.webContents.on('before-input-event', (inputEvent, input) => {
-    if (input.type === 'keyDown' && input.control && !input.alt && !input.shift && input.key.toLowerCase() === 't') {
-      inputEvent.preventDefault()
-      toggleComposeWindow()
-    }
-  })
-  window.on('closed', () => {
-    if (composeWindow === window) {
-      composeWindow = null
-    }
-  })
-  composeWindow = window
+  return translatedText
 }
 
-let foregroundWatcherProcess: ChildProcess | null = null
-let composeShortcutRegistered = false
-
-function setComposeShortcutActive(active: boolean): void {
-  if (active && !composeShortcutRegistered) {
-    composeShortcutRegistered = globalShortcut.register('Control+T', toggleComposeWindow)
-  } else if (!active && composeShortcutRegistered) {
-    globalShortcut.unregister('Control+T')
-    composeShortcutRegistered = false
+// A line the player sent with Ctrl+Enter. It bypasses the incoming translation queue, which can
+// be several lines deep in a busy lobby, because the player is waiting on this one.
+function handleOutgoingChatLine(line: string): boolean {
+  const match = OUTGOING_LINE_PATTERN.exec(line)
+  if (!match) {
+    return false
   }
+  const outgoingId = match[1]
+  const channelName = match[2] as OutgoingChannel
+  const messageText = decodeRelayField(match[3]).trim()
+  const receivedAt = Date.now()
+  const duplicateKey = outgoingId + '|' + messageText
+  if (duplicateKey === lastOutgoingKey && receivedAt - lastOutgoingAt < DUPLICATE_WINDOW_MILLISECONDS) {
+    return true
+  }
+  lastOutgoingKey = duplicateKey
+  lastOutgoingAt = receivedAt
+  if (messageText === '') {
+    return true
+  }
+  // The game numbers lines from 1 again after its interface reloads, so a reused number is a new line.
+  outgoingSentAsTyped.delete(outgoingId)
+  const targetLanguage = translationTargetLanguage === 'en' ? 'th' : 'en'
+  const untranslatedNotice = OUTGOING_NOTICES.untranslated[translationTargetLanguage]
+  logLine(
+    'compose',
+    'translating outgoing ' + channelName + ' chat ' + outgoingId + ' to ' + targetLanguage + ': ' + messageText.slice(0, 60)
+  )
+  translateOutgoingChat(messageText, targetLanguage)
+    .then((translatedText) => {
+      if (!translatedText) {
+        logLine('compose', 'outgoing chat ' + outgoingId + ' came back empty, sending it as typed')
+        writeOutgoingSendInbox(outgoingId, messageText, channelName, untranslatedNotice)
+        return
+      }
+      logLine(
+        'compose',
+        'outgoing chat ' + outgoingId + ' translated in ' + (Date.now() - receivedAt) + 'ms: ' + translatedText.slice(0, 60)
+      )
+      writeOutgoingSendInbox(outgoingId, translatedText, channelName, '')
+    })
+    .catch((error) => {
+      logLine(
+        'compose',
+        'outgoing chat ' +
+          outgoingId +
+          ' could not be translated after ' +
+          (Date.now() - receivedAt) +
+          'ms, sending it as typed: ' +
+          String(error)
+      )
+      noteTranslationFailure(describeTranslationFailure(error))
+      writeOutgoingSendInbox(outgoingId, messageText, channelName, untranslatedNotice)
+    })
+  return true
 }
 
-function startForegroundWatcher(): void {
-  if (foregroundWatcherProcess) {
+function handleOutgoingSettledLine(line: string): void {
+  const sentMatch = OUTGOING_SENT_PATTERN.exec(line)
+  if (sentMatch) {
+    dropOutgoingInboxEntry(sentMatch[1])
+    noteDeliveryConfirmed()
     return
   }
-  const watcherScript = [
-    "Add-Type -Namespace Win32 -Name ForegroundWindowReader -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);'",
-    "$lastName = 'startup'",
-    'while ($true) {',
-    '  $handle = [Win32.ForegroundWindowReader]::GetForegroundWindow()',
-    '  $foregroundProcessId = [uint32]0',
-    '  [void][Win32.ForegroundWindowReader]::GetWindowThreadProcessId($handle, [ref]$foregroundProcessId)',
-    "  $name = ''",
-    '  try { $name = (Get-Process -Id $foregroundProcessId -ErrorAction Stop).ProcessName } catch {}',
-    '  if ($name -ne $lastName) { $lastName = $name; [Console]::Out.WriteLine($name) }',
-    '  Start-Sleep -Milliseconds 300',
-    '}'
-  ].join('\n')
-  const watcher = spawn('powershell.exe', ['-NoProfile', '-Command', watcherScript], {
-    stdio: ['ignore', 'pipe', 'ignore'],
-    windowsHide: true
-  })
-  watcher.stdout?.setEncoding('utf8')
-  let pendingOutput = ''
-  watcher.stdout?.on('data', (chunk: string) => {
-    pendingOutput += chunk
-    const outputLines = pendingOutput.split(/\r?\n/)
-    pendingOutput = outputLines.pop() ?? ''
-    for (const outputLine of outputLines) {
-      setComposeShortcutActive(outputLine.trim().toLowerCase() === 'juvio')
-    }
-  })
-  watcher.on('exit', () => {
-    if (foregroundWatcherProcess === watcher) {
-      foregroundWatcherProcess = null
-    }
-  })
-  foregroundWatcherProcess = watcher
-}
-
-function stopForegroundWatcher(): void {
-  setComposeShortcutActive(false)
-  if (foregroundWatcherProcess) {
-    foregroundWatcherProcess.kill()
-    foregroundWatcherProcess = null
-  }
-}
-
-function focusGameWindow(): void {
-  const focusScript =
-    "$gameProcess = Get-Process juvio -ErrorAction SilentlyContinue | Select-Object -First 1; if ($gameProcess) { (New-Object -ComObject WScript.Shell).AppActivate($gameProcess.Id) }"
-  spawn('powershell.exe', ['-NoProfile', '-Command', focusScript], {
-    stdio: 'ignore',
-    windowsHide: true
-  })
-}
-
-function hideComposeAndRefocusGame(): void {
-  composeWindow?.hide()
-  focusGameWindow()
-}
-
-function toggleComposeWindow(): void {
-  if (!composeWindow) {
+  const lateMatch = OUTGOING_LATE_PATTERN.exec(line)
+  if (lateMatch) {
+    const outgoingId = lateMatch[1]
+    logLine('compose', 'the game had already sent outgoing chat ' + outgoingId + ' as typed, its translation arrived late')
+    dropOutgoingInboxEntry(outgoingId)
+    noteDeliveryConfirmed()
     return
   }
-  if (composeWindow.isVisible()) {
-    hideComposeAndRefocusGame()
-  } else {
-    composeWindow.show()
-    composeWindow.focus()
-    composeWindow.webContents.send('chatCompose:shown')
+  const fallbackMatch = OUTGOING_FALLBACK_PATTERN.exec(line)
+  if (fallbackMatch) {
+    const outgoingId = fallbackMatch[1]
+    logLine(
+      'compose',
+      'no translation reached the game within ' + OUTGOING_FALLBACK_MILLISECONDS + 'ms, it sent outgoing chat ' + outgoingId + ' as typed'
+    )
+    if (!outgoingSendCalls.has(outgoingId)) {
+      outgoingSentAsTyped.add(outgoingId)
+    }
+    queueOutgoingInboxLine(outgoingId, noticeLuaCall(OUTGOING_NOTICES.tooSlow[translationTargetLanguage], outgoingId))
+    return
+  }
+  if (line.includes('HONCHATNOTICE|')) {
+    noteDeliveryConfirmed()
   }
 }
 
-export function registerChatComposeHandlers(): void {
-  ipcMain.handle('chatCompose:mode', () => translationTargetLanguage)
-
-  ipcMain.handle('chatCompose:translate', async (_event, inputText: string) => {
-    if (typeof inputText !== 'string' || inputText.trim() === '') {
-      return { thaiText: '', backTranslation: '' }
-    }
-    const outgoingLanguage = translationTargetLanguage === 'en' ? 'th' : 'en'
-    try {
-      const thaiText = await translateText(inputText.trim(), outgoingLanguage)
-      if (!thaiText) {
-        return { thaiText: '', backTranslation: '' }
-      }
-      let backTranslation = ''
-      try {
-        backTranslation = await translateText(thaiText, translationTargetLanguage)
-      } catch {
-        backTranslation = ''
-      }
-      return { thaiText, backTranslation }
-    } catch {
-      return { thaiText: '', backTranslation: '' }
-    }
-  })
-
-  ipcMain.handle('chatCompose:send', (_event, thaiText: string, channelName: string) => {
-    if (typeof thaiText !== 'string' || thaiText.trim() === '') {
-      return false
-    }
-    logLine('compose', 'sending to ' + (channelName === 'all' ? 'all' : 'team') + ' chat: ' + thaiText.trim().slice(0, 60))
-    writeChatSendInbox(thaiText.trim(), channelName === 'all' ? 'all' : 'team')
-    hideComposeAndRefocusGame()
-    return true
-  })
-
-  ipcMain.handle('chatCompose:close', () => {
-    hideComposeAndRefocusGame()
-    return true
-  })
-
+export function registerChatTranslationHandlers(): void {
   ipcMain.handle('chatTranslation:cacheInfo', () => translationCacheInfo())
 
   ipcMain.handle('chatTranslation:clearCache', () => {
@@ -1630,10 +1656,7 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     }
     dropAppliedInboxEntry(sequence)
   }
-  if (line.includes('HONCHATSENT|')) {
-    dropSentChatInboxEntries()
-    noteDeliveryConfirmed()
-  }
+  handleOutgoingSettledLine(line)
   const deliveredMatch = /HON(?:CHAT|CHAN|WHISPER|IM)DELIVERED\|(\d+)/.exec(line)
   if (deliveredMatch) {
     if (parseInt(deliveredMatch[1], 10) > 0) {
@@ -1649,6 +1672,9 @@ function handleDebugOutputLine(_processId: number, line: string): void {
       reportHealthChange()
     }
     logLine('relay', line)
+  }
+  if (handleOutgoingChatLine(line)) {
+    return
   }
   if (handleChannelRelayLine(line)) {
     return
@@ -1749,13 +1775,15 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   pendingDuplicateText = ''
   pendingDuplicateCounter = 0
   pendingDuplicateTime = 0
+  outgoingSendCalls.clear()
+  outgoingSentAsTyped.clear()
+  lastOutgoingKey = ''
+  lastOutgoingAt = 0
   clearInboxFiles()
   clearChannelInboxFiles()
   if (OVERLAY_WINDOW_ENABLED) {
     createOverlayWindow()
   }
-  createComposeWindow()
-  startForegroundWatcher()
   startDebugOutputListener(handleDebugOutputLine)
   if (gameProcess) {
     whenGameFullyExits(gameProcess, () => {
@@ -1779,14 +1807,9 @@ export function stopThaiChatTranslation(): void {
     clearTimeout(relayWatchdogTimer)
     relayWatchdogTimer = null
   }
-  stopForegroundWatcher()
   stopDebugOutputListener(handleDebugOutputLine)
   if (overlayWindow) {
     overlayWindow.close()
     overlayWindow = null
-  }
-  if (composeWindow) {
-    composeWindow.close()
-    composeWindow = null
   }
 }
