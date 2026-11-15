@@ -63,11 +63,6 @@ const modManagerApi = {
   onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => {
     ipcRenderer.on('chatTranslation:message', (_event, message: ChatTranslationMessage) => listener(message))
   },
-  translateForChatCompose: (englishText: string): Promise<{ thaiText: string; backTranslation: string }> =>
-    ipcRenderer.invoke('chatCompose:translate', englishText),
-  sendComposedChat: (thaiText: string, channelName: string) => ipcRenderer.invoke('chatCompose:send', thaiText, channelName),
-  closeChatCompose: () => ipcRenderer.invoke('chatCompose:close'),
-  getChatComposeMode: (): Promise<string> => ipcRenderer.invoke('chatCompose:mode'),
   setChatTranslationLanguage: (language: string) => ipcRenderer.invoke('chatTranslation:setLanguage', language),
   createDesktopShortcuts: () => ipcRenderer.invoke('shortcuts:create'),
   getTranslationCacheInfo: () => ipcRenderer.invoke('chatTranslation:cacheInfo'),
@@ -88,9 +83,6 @@ const modManagerApi = {
   getTranslationHealth: (): Promise<TranslationHealth> => ipcRenderer.invoke('chatTranslation:health'),
   onTranslationHealth: (listener: (health: TranslationHealth) => void) => {
     ipcRenderer.on('chatTranslation:health', (_event, health: TranslationHealth) => listener(health))
-  },
-  onChatComposeShown: (listener: () => void) => {
-    ipcRenderer.on('chatCompose:shown', () => listener())
   }
 }
 

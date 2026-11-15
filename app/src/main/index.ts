@@ -21,7 +21,7 @@ import { applyHonmods, readHonmodMetadata, readHonmodIconDataUrl } from './honmo
 import {
   chatRelayLuaEdits,
   CHAT_RELAY_CONSOLE_COMMAND,
-  registerChatComposeHandlers,
+  registerChatTranslationHandlers,
   startThaiChatTranslation,
   stopThaiChatTranslation,
   isThaiChatTranslationActive,
@@ -490,7 +490,7 @@ function registerInterProcessHandlers(): void {
       version: app.getVersion(),
       author: 'Doogle',
       description:
-        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\n\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag.\n\nThe direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai.\n\nPress Ctrl+T during a match to type in your language and send it in the other, with a preview of exactly what will be sent.',
+        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\n\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag.\n\nThe direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai.\n\nTo send a message in the other language, type it in the game chat as usual and press Ctrl+Enter instead of Enter, or Ctrl+Shift+Enter to send it to all chat. The chat closes straight away and the translated message follows a moment later. Plain Enter still sends exactly what you typed.',
       category: 'Utility',
       abilityKey: '',
       icon: null,
@@ -781,7 +781,7 @@ function createMainWindow(): void {
       title: 'Chat translation is running',
       message: 'Closing the mod manager will stop chat translation.',
       detail:
-        'Chat translation is not a normal honmod. The mod manager does the translating while you play. If you close it now, chat translation and the Ctrl+T typing window stop working until you launch the game from the manager again.',
+        'Chat translation is not a normal honmod. The mod manager does the translating while you play. If you close it now, chat translation stops and Ctrl+Enter messages go out as typed after a few seconds until you launch the game from the manager again.',
       buttons: ['Keep Open', 'Close Anyway'],
       defaultId: 0,
       cancelId: 0,
@@ -878,7 +878,7 @@ app.whenReady().then(() => {
   setJuvioRootOverride(loadChosenGameFolder())
   logLine('app', 'game folder: ' + (detectJuvioRoot() ?? 'not found'))
   registerInterProcessHandlers()
-  registerChatComposeHandlers()
+  registerChatTranslationHandlers()
   if (startupLaunchFlag) {
     runShortcutLaunch(startupLaunchFlag, true)
     return
