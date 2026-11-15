@@ -1,9 +1,10 @@
 // Ctrl+Enter in one of the game's own chat boxes hands the typed line to the manager instead of
-// sending it, to the channel the box is in. Ctrl+Shift+Enter sends it to all chat, matching
-// Shift+Enter in the game. The box clears at once like a normal send, the manager translates the
-// line and writes it back through an inbox, and the game sends the translated text. The game keeps
-// each line until that happens, and sends it as typed if the manager has not answered in time (the
-// manager closed, or every provider is slow), so a line is never lost.
+// sending it, and the translation goes to the channel the box is in: a box opened for all chat
+// sends to all chat, a team box to team chat. The box clears at once like a normal send, the
+// manager translates the line and writes it back through an inbox, and the game sends the
+// translated text. The game keeps each line until that happens, and sends it as typed if the
+// manager has not answered in time (the manager closed, or every provider is slow), so a line is
+// never lost.
 //
 // There are two chat boxes. The in-match box sends through GameChat:ChatCommand in chat.lua, and
 // the main menu box (chat channels such as Global, the pre-match lobby and hero pick) sends through
@@ -26,12 +27,10 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     "\tpcall(function() Echo('[HoN Mod Manager] ' .. message) end)",
     'end',
     '',
-    'function ChatTranslatorModifiers()',
+    'function ChatTranslatorCtrlDown()',
     '\tlocal ctrlDown = false',
-    '\tlocal shiftDown = false',
     '\tpcall(function() ctrlDown = Input.IsCtrlDown() and true or false end)',
-    '\tpcall(function() shiftDown = Input.IsShiftDown() and true or false end)',
-    '\treturn ctrlDown, shiftDown',
+    '\treturn ctrlDown',
     'end',
     '',
     'function ChatTranslatorHold(sourceTag, messageText, channelName, channelTarget)',
@@ -64,10 +63,9 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     'function ChatTranslatorOutgoing(inputText)',
     '\tlocal intercepted = false',
     '\tpcall(function()',
-    '\t\tlocal ctrlDown, shiftDown = ChatTranslatorModifiers()',
-    '\t\tif not ctrlDown then return end',
+    '\t\tif not ChatTranslatorCtrlDown() then return end',
     "\t\tlocal channelName = 'team'",
-    "\t\tif shiftDown or (GameChat and GameChat.lastType == 'all') then channelName = 'all' end",
+    "\t\tif GameChat and GameChat.lastType == 'all' then channelName = 'all' end",
     "\t\tintercepted = ChatTranslatorHold('g', tostring(inputText or ''), channelName, nil)",
     '\tend)',
     '\treturn intercepted',
@@ -76,8 +74,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     'function ChatTranslatorLobbyOutgoing()',
     '\tlocal intercepted = false',
     '\tpcall(function()',
-    '\t\tlocal ctrlDown, shiftDown = ChatTranslatorModifiers()',
-    '\t\tif not ctrlDown then return end',
+    '\t\tif not ChatTranslatorCtrlDown() then return end',
     "\t\tlocal channelName = 'team'",
     '\t\tlocal channelTarget = nil',
     '\t\tlocal textBox = Communicator.chatTextBox',
@@ -93,7 +90,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\t\t\ttextBox = Communicator.chatLobbyTextBox',
     "\t\t\tmessageText = tostring(textBox:GetInputLine() or '')",
     '\t\tend',
-    "\t\tif channelName ~= 'channel' and (shiftDown or Communicator.currentChatType == Communicator.chatType.ALL_CHAT) then channelName = 'all' end",
+    "\t\tif channelName ~= 'channel' and Communicator.currentChatType == Communicator.chatType.ALL_CHAT then channelName = 'all' end",
     "\t\tif ChatTranslatorHold('l', messageText, channelName, channelTarget) then",
     "\t\t\ttextBox:SetInputLine('')",
     '\t\t\tintercepted = true',
@@ -105,8 +102,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     'function ChatTranslatorImOutgoing(chatbox, target)',
     '\tlocal intercepted = false',
     '\tpcall(function()',
-    '\t\tlocal ctrlDown = ChatTranslatorModifiers()',
-    '\t\tif not ctrlDown then return end',
+    '\t\tif not ChatTranslatorCtrlDown() then return end',
     "\t\tlocal messageText = tostring(chatbox:GetValue() or '')",
     "\t\tif ChatTranslatorHold('l', messageText, 'im', { box = chatbox, name = tostring(target) }) then",
     '\t\t\tchatbox:Clear()',

@@ -490,7 +490,7 @@ function registerInterProcessHandlers(): void {
       version: app.getVersion(),
       author: 'Doogle',
       description:
-        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\n\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag.\n\nThe direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai.\n\nTo send a message in the other language, type it in the game chat as usual and press Ctrl+Enter instead of Enter, or Ctrl+Shift+Enter to send it to all chat. The chat closes straight away and the translated message follows a moment later. Plain Enter still sends exactly what you typed.',
+        '**Needs the mod manager running while you play. Launch the game from the manager or the modded desktop shortcut.**\n\nTranslates chat between Thai and English inside the game chat while you play, marked with a [T] tag.\n\nThe direction follows the manager language: with the manager in English, Thai chat becomes English; with the manager in Thai, English chat becomes Thai.\n\nTo send a message in the other language, type it in the game chat as usual and press Ctrl+Enter instead of Enter. It goes to the chat you typed it in, whether that is team or all chat, a channel such as Global, or a private message. The chat closes straight away and the translated message follows a moment later. Plain Enter still sends exactly what you typed.',
       category: 'Utility',
       abilityKey: '',
       icon: null,
