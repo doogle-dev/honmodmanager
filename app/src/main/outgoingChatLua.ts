@@ -13,8 +13,15 @@
 //
 // A line typed in a chat channel is held with the channel's name, and a private message (IM) with
 // its text box and recipient, and the game sends the translation back to that channel or person
-// itself, so the manager only ever sees the kind: team, all, channel or im. IMs come from
+// itself, so the manager only ever sees the kind: team, all, channel, im or whisper. IMs come from
 // Social_IM:SendChatMessage in social_im.lua, on the same main menu side as the channels.
+//
+// Other slash commands are never touched, but a whisper (/w or /whisper <name> <message>) or a
+// reply (/r or /reply <message>) typed in the match or main menu chat box is held too. Only the
+// message goes to the manager, and the game sends the command with the translation after it
+// through the same function the box would have used, so the game's own chat command handling
+// does the whispering exactly as it would for the line as typed. The IM box sends text literally,
+// so a slash line there is left alone.
 export const OUTGOING_FALLBACK_MILLISECONDS = 5000
 
 export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: string): string {
@@ -33,16 +40,44 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\treturn ctrlDown',
     'end',
     '',
-    'function ChatTranslatorHold(sourceTag, messageText, channelName, channelTarget)',
-    "\tif string.find(messageText, '^%s*$') or string.find(messageText, '^%s*/') then return false end",
+    'function ChatTranslatorSplitWhisper(messageText)',
+    "\tlocal _, commandEnd, command = string.find(messageText, '^%s*/(%a+)%s+')",
+    '\tif not commandEnd then return nil end',
+    '\tcommand = string.lower(command)',
+    '\tlocal prefixEnd = commandEnd',
+    "\tif command == 'w' or command == 'whisper' then",
+    "\t\tlocal _, nameEnd = string.find(messageText, '^%S+%s+', commandEnd + 1)",
+    '\t\tif not nameEnd then return nil end',
+    '\t\tprefixEnd = nameEnd',
+    "\telseif command ~= 'r' and command ~= 'reply' then",
+    '\t\treturn nil',
+    '\tend',
+    '\tlocal bodyText = string.sub(messageText, prefixEnd + 1)',
+    "\tif string.find(bodyText, '^%s*$') then return nil end",
+    '\treturn string.sub(messageText, 1, prefixEnd), bodyText',
+    'end',
+    '',
+    'function ChatTranslatorHold(sourceTag, messageText, channelName, channelTarget, allowWhisper)',
+    "\tif string.find(messageText, '^%s*$') then return false end",
+    "\tlocal sendPrefix = ''",
+    '\tlocal translateText = messageText',
+    '\tlocal echoKind = channelName',
+    "\tif string.find(messageText, '^%s*/') then",
+    '\t\tif not allowWhisper then return false end',
+    '\t\tlocal whisperPrefix, whisperBody = ChatTranslatorSplitWhisper(messageText)',
+    '\t\tif not whisperPrefix then return false end',
+    '\t\tsendPrefix = whisperPrefix',
+    '\t\ttranslateText = whisperBody',
+    "\t\techoKind = 'whisper'",
+    '\tend',
     '\tlocal queuedAt = GetTime()',
     '\tlocal count = (ChatTranslatorOutgoingCounters[sourceTag] or 0) + 1',
     '\tlocal outgoingId = sourceTag .. tostring(count)',
-    "\tEcho('[HoN Mod Manager] HONCHATOUTGOING|' .. outgoingId .. '|' .. channelName .. '|' .. " +
+    "\tEcho('[HoN Mod Manager] HONCHATOUTGOING|' .. outgoingId .. '|' .. echoKind .. '|' .. " +
       encodeFunctionName +
-      '(messageText))',
+      '(translateText))',
     '\tChatTranslatorOutgoingCounters[sourceTag] = count',
-    '\tChatTranslatorOutgoingPending[outgoingId] = { text = messageText, channel = channelName, channelTarget = channelTarget, queuedAt = queuedAt }',
+    '\tChatTranslatorOutgoingPending[outgoingId] = { text = messageText, prefix = sendPrefix, channel = channelName, channelTarget = channelTarget, queuedAt = queuedAt }',
     '\tChatTranslatorOutgoingTargets[outgoingId] = { kind = channelName, target = channelTarget }',
     '\treturn true',
     'end',
@@ -66,7 +101,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\t\tif not ChatTranslatorCtrlDown() then return end',
     "\t\tlocal channelName = 'team'",
     "\t\tif GameChat and GameChat.lastType == 'all' then channelName = 'all' end",
-    "\t\tintercepted = ChatTranslatorHold('g', tostring(inputText or ''), channelName, nil)",
+    "\t\tintercepted = ChatTranslatorHold('g', tostring(inputText or ''), channelName, nil, true)",
     '\tend)',
     '\treturn intercepted',
     'end',
@@ -91,7 +126,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     "\t\t\tmessageText = tostring(textBox:GetInputLine() or '')",
     '\t\tend',
     "\t\tif channelName ~= 'channel' and Communicator.currentChatType == Communicator.chatType.ALL_CHAT then channelName = 'all' end",
-    "\t\tif ChatTranslatorHold('l', messageText, channelName, channelTarget) then",
+    "\t\tif ChatTranslatorHold('l', messageText, channelName, channelTarget, true) then",
     "\t\t\ttextBox:SetInputLine('')",
     '\t\t\tintercepted = true',
     '\t\tend',
@@ -104,7 +139,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\tpcall(function()',
     '\t\tif not ChatTranslatorCtrlDown() then return end',
     "\t\tlocal messageText = tostring(chatbox:GetValue() or '')",
-    "\t\tif ChatTranslatorHold('l', messageText, 'im', { box = chatbox, name = tostring(target) }) then",
+    "\t\tif ChatTranslatorHold('l', messageText, 'im', { box = chatbox, name = tostring(target) }, false) then",
     '\t\t\tchatbox:Clear()',
     '\t\t\tchatbox:SetFocus(1)',
     '\t\t\tintercepted = true',
@@ -118,6 +153,7 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\t\tlocal messageText = ' + decodeFunctionName + '(encodedText)',
     "\t\tif messageText == '' then return end",
     '\t\tlocal channelTarget = nil',
+    "\t\tlocal sendPrefix = ''",
     '\t\tif outgoingId ~= nil then',
     '\t\t\tlocal pending = ChatTranslatorOutgoingPending[outgoingId]',
     '\t\t\tif pending == nil then',
@@ -127,9 +163,10 @@ export function outgoingChatLua(encodeFunctionName: string, decodeFunctionName: 
     '\t\t\tChatTranslatorOutgoingPending[outgoingId] = nil',
     '\t\t\tchannelName = pending.channel',
     '\t\t\tchannelTarget = pending.channelTarget',
+    "\t\t\tsendPrefix = pending.prefix or ''",
     '\t\tend',
     "\t\tif (channelName == 'channel' or channelName == 'im') and channelTarget == nil then return end",
-    '\t\tChatTranslatorSendText(messageText, channelName, channelTarget)',
+    '\t\tChatTranslatorSendText(sendPrefix .. messageText, channelName, channelTarget)',
     "\t\tChatTranslatorAnnounce('HONCHATSENT|' .. tostring(channelName) .. '|' .. tostring(outgoingId or 0))",
     '\tend)',
     'end',

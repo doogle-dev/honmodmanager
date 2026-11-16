@@ -713,7 +713,7 @@ function noticeLuaCall(noticeText: string, outgoingId: string): string {
   return "if ChatTranslatorNotice then ChatTranslatorNotice('" + noticeEncoded + "', '" + outgoingId + "') end"
 }
 
-type OutgoingChannel = 'team' | 'all' | 'channel' | 'im'
+type OutgoingChannel = 'team' | 'all' | 'channel' | 'im' | 'whisper'
 
 function writeOutgoingSendInbox(outgoingId: string, messageText: string, channelName: OutgoingChannel, noticeText: string): void {
   if (!translationActive) {
@@ -1335,7 +1335,7 @@ function createOverlayWindow(): void {
   overlayWindow = window
 }
 
-const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel|im)\|([A-Za-z0-9+/=]*)/
+const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel|im|whisper)\|([A-Za-z0-9+/=]*)/
 const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
 const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
 const OUTGOING_FALLBACK_PATTERN = /HONCHATOUTGOINGFALLBACK\|([gl]\d+)/
