@@ -185,6 +185,7 @@ function App(): JSX.Element {
   const [gameFolder, setGameFolder] = useState<GameFolderInfo | null>(null)
   const [gameFolderInvalid, setGameFolderInvalid] = useState(false)
   const [profileSettingsMessage, setProfileSettingsMessage] = useState<{ text: string; failed: boolean } | null>(null)
+  const [closeToTray, setCloseToTray] = useState(true)
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(loadUiLanguage())
   const [translationHealth, setTranslationHealth] = useState<TranslationHealth | null>(null)
   const [logViewOpen, setLogViewOpen] = useState(false)
@@ -239,6 +240,7 @@ function App(): JSX.Element {
     })
     window.modManager.getTranslationCacheInfo().then(setCacheInfo)
     window.modManager.getGameFolder().then(setGameFolder)
+    window.modManager.getCloseToTray().then(setCloseToTray)
     window.modManager.setChatTranslationLanguage(loadUiLanguage())
     window.modManager.getTranslationHealth().then(setTranslationHealth)
     window.modManager.onTranslationHealth(setTranslationHealth)
@@ -306,6 +308,10 @@ function App(): JSX.Element {
   async function resetGameFolder(): Promise<void> {
     setGameFolder(await window.modManager.resetGameFolder())
     setGameFolderInvalid(false)
+  }
+
+  async function changeCloseToTray(enabled: boolean): Promise<void> {
+    setCloseToTray(await window.modManager.setCloseToTray(enabled))
   }
 
   async function copyProfileSettings(): Promise<void> {
@@ -810,19 +816,17 @@ function App(): JSX.Element {
                 <span className="text-slate-400">
                   {t('version')} {appVersion || t('unknown')}
                 </span>
-                <span className="text-slate-600">|</span>
-                {updateReadyVersion ? (
-                  <button onClick={() => window.modManager.installUpdate()} className="text-[#7fb2e5] hover:underline">
-                    {t('restartNow')}
-                  </button>
-                ) : (
-                  <button
-                    onClick={checkForUpdates}
-                    disabled={checkingForUpdates || downloadProgress !== null}
-                    className="text-[#7fb2e5] hover:underline disabled:opacity-60"
-                  >
-                    {checkingForUpdates ? t('checking') : t('checkForUpdates')}
-                  </button>
+                {!updateReadyVersion && (
+                  <>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      onClick={checkForUpdates}
+                      disabled={checkingForUpdates || downloadProgress !== null}
+                      className="text-[#7fb2e5] hover:underline disabled:opacity-60"
+                    >
+                      {checkingForUpdates ? t('checking') : t('checkForUpdates')}
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -927,9 +931,20 @@ function App(): JSX.Element {
 
           {page === 'settings' && (
             <div className="mx-auto max-w-4xl space-y-6 text-sm">
-              {(updateMessage || downloadProgress) && (
+              {(updateMessage || downloadProgress || updateReadyVersion) && (
                 <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
-                  {updateMessage && <p className="text-slate-400">{t(updateMessage.key, updateMessage.params)}</p>}
+                  <div className="flex items-start justify-between gap-6">
+                    {updateMessage && <p className="min-w-0 text-slate-400">{t(updateMessage.key, updateMessage.params)}</p>}
+                    {updateReadyVersion && (
+                      <button
+                        onClick={() => window.modManager.installUpdate()}
+                        className="shrink-0 rounded px-4 py-1.5 text-[13px] font-normal text-white hover:brightness-125"
+                        style={{ backgroundColor: ACCENT, color: ACCENT_TEXT }}
+                      >
+                        {t('restartNow')}
+                      </button>
+                    )}
+                  </div>
                   {downloadProgress && (
                     <div className={updateMessage ? 'mt-3' : ''}>
                       <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
@@ -1110,6 +1125,31 @@ function App(): JSX.Element {
                 <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
                   <div className="flex items-start justify-between gap-6">
                     <div className="min-w-0">
+                      <h3 className="mb-1 font-semibold text-white">{t('closeToTray')}</h3>
+                      <p className="text-slate-400">{t('closeToTrayDescription')}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center">
+                      <button
+                        role="switch"
+                        aria-checked={closeToTray}
+                        onClick={() => changeCloseToTray(!closeToTray)}
+                        className={'relative h-6 w-11 rounded-full transition-colors ' + (closeToTray ? '' : 'bg-black/40')}
+                        style={closeToTray ? { backgroundColor: ACCENT } : undefined}
+                      >
+                        <span
+                          className={
+                            'absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-all ' +
+                            (closeToTray ? 'left-[23px]' : 'left-[3px]')
+                          }
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/20 p-4" style={{ backgroundColor: SIDEBAR_BACKGROUND }}>
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0">
                       <h3 className="mb-1 font-semibold text-white">{t('logs')}</h3>
                       <p className="text-slate-400">{t('logsDescription')}</p>
                     </div>
@@ -1166,7 +1206,7 @@ function App(): JSX.Element {
             {t('healthNeedsAttention')}
           </button>
         )}
-        {updateReadyVersion && (
+        {updateReadyVersion && page !== 'settings' && (
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-slate-400">{t('updateReady', { version: updateReadyVersion })}</span>
             <button

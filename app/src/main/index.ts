@@ -30,6 +30,12 @@ import {
 } from './thaiChatTranslation'
 import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
 import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
+import {
+  createSystemTray,
+  setSystemTrayLanguage,
+  announceWindowHiddenToTray,
+  destroySystemTray
+} from './systemTray'
 import { copyVanillaSettingsToModdedProfile } from './profileSettings'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory, translationLogPath } from './managerLogger'
@@ -190,6 +196,23 @@ function saveChatTranslationSettings(enabled: boolean, targetLanguage: 'en' | 't
 
 function saveChatTranslationEnabled(enabled: boolean): void {
   saveChatTranslationSettings(enabled, loadChatTranslationSettings().targetLanguage)
+}
+
+function windowBehaviourSettingsPath(): string {
+  return join(app.getPath('userData'), 'window-behaviour.json')
+}
+
+function loadCloseToTray(): boolean {
+  try {
+    const stored = JSON.parse(readFileSync(windowBehaviourSettingsPath(), 'utf8'))
+    return stored.closeToTray !== false
+  } catch {
+    return true
+  }
+}
+
+function saveCloseToTray(closeToTray: boolean): void {
+  writeFileSync(windowBehaviourSettingsPath(), JSON.stringify({ closeToTray }, null, 2))
 }
 
 function gameFolderSettingsPath(): string {
@@ -414,6 +437,7 @@ function registerInterProcessHandlers(): void {
   ipcMain.handle('chatTranslation:setLanguage', (_event, language: string) => {
     const settings = loadChatTranslationSettings()
     saveChatTranslationSettings(settings.enabled, language === 'th' ? 'th' : 'en')
+    setSystemTrayLanguage(language === 'th' ? 'th' : 'en')
     return true
   })
 
@@ -631,6 +655,13 @@ function registerInterProcessHandlers(): void {
     isDevBuild: isDevChannelBuild()
   }))
 
+  ipcMain.handle('windowBehaviour:getCloseToTray', () => loadCloseToTray())
+
+  ipcMain.handle('windowBehaviour:setCloseToTray', (_event, closeToTray: boolean) => {
+    saveCloseToTray(closeToTray === true)
+    return loadCloseToTray()
+  })
+
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall()
   })
@@ -644,6 +675,7 @@ function registerInterProcessHandlers(): void {
 }
 
 let mainWindowReference: BrowserWindow | null = null
+let isQuittingApplication: boolean = false
 let activeDownloadCancellationToken: CancellationToken | null = null
 let downloadedUpdateVersion = ''
 
@@ -773,6 +805,12 @@ function createMainWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
+    if (!isQuittingApplication && loadCloseToTray()) {
+      event.preventDefault()
+      mainWindow.hide()
+      announceWindowHiddenToTray()
+      return
+    }
     if (!isThaiChatTranslationActive()) {
       return
     }
@@ -810,6 +848,19 @@ function createMainWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function showMainWindow(): void {
+  const window = mainWindowReference
+  if (!window || window.isDestroyed()) {
+    createMainWindow()
+    return
+  }
+  if (window.isMinimized()) {
+    window.restore()
+  }
+  window.show()
+  window.focus()
 }
 
 function launchFlagFromArguments(argumentList: string[]): 'modded' | 'vanilla' | null {
@@ -861,14 +912,7 @@ app.on('second-instance', (_event, argumentList) => {
     runShortcutLaunch(secondInstanceFlag, false)
     return
   }
-  if (mainWindowReference) {
-    if (mainWindowReference.isMinimized()) {
-      mainWindowReference.restore()
-    }
-    mainWindowReference.focus()
-  } else {
-    createMainWindow()
-  }
+  showMainWindow()
 })
 
 app.whenReady().then(() => {
@@ -884,6 +928,12 @@ app.whenReady().then(() => {
     return
   }
   createMainWindow()
+  createSystemTray(appIconPath, loadChatTranslationSettings().targetLanguage, {
+    showWindow: () => showMainWindow(),
+    launchModded: () => runShortcutLaunch('modded', false),
+    launchVanilla: () => runShortcutLaunch('vanilla', false),
+    quit: () => app.quit()
+  })
   startTranslationHealthWatch()
   resumeTranslationSessionIfGameRunning()
 
@@ -924,8 +974,13 @@ app.whenReady().then(() => {
   })
 })
 
+app.on('before-quit', () => {
+  isQuittingApplication = true
+})
+
 app.on('will-quit', () => {
   stopThaiChatTranslation()
+  destroySystemTray()
 })
 
 app.on('window-all-closed', () => {
