@@ -59,6 +59,11 @@ const translations: Record<string, { en: string; th: string }> = {
   viewLog: { en: 'View Log', th: 'ดูบันทึก' },
   updateReady: { en: 'Update {version} ready', th: 'อัปเดต {version} พร้อมแล้ว' },
   desktopShortcuts: { en: 'Desktop Shortcuts', th: 'ทางลัดบนเดสก์ท็อป' },
+  closeToTray: { en: 'Close to Tray', th: 'ปิดลงถาดระบบ' },
+  closeToTrayDescription: {
+    en: 'The close button hides the manager in the system tray instead of quitting it. Open it again from the tray icon next to the clock.',
+    th: 'ปุ่มปิดจะซ่อนตัวจัดการม็อดไว้ในถาดระบบแทนการออกจากโปรแกรม เปิดกลับมาได้จากไอคอนในถาดระบบข้างนาฬิกา'
+  },
   languageAndChatSection: { en: 'Language and chat', th: 'ภาษาและแชท' },
   systemSection: { en: 'System', th: 'ระบบ' },
   version: { en: 'Version', th: 'เวอร์ชัน' },

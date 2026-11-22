@@ -52,6 +52,8 @@ interface ModManagerApi {
   getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
   clearTranslationCache: () => Promise<boolean>
   openTranslationCacheFolder: () => Promise<boolean>
+  getCloseToTray: () => Promise<boolean>
+  setCloseToTray: (closeToTray: boolean) => Promise<boolean>
   getGameFolder: () => Promise<GameFolderInfo>
   chooseGameFolder: () => Promise<GameFolderInfo & { chosen: boolean; invalid: boolean }>
   resetGameFolder: () => Promise<GameFolderInfo>
