@@ -68,8 +68,8 @@ const translations: Record<string, { en: string; th: string }> = {
   systemSection: { en: 'System', th: 'ระบบ' },
   version: { en: 'Version', th: 'เวอร์ชัน' },
   desktopShortcutsDescription: {
-    en: 'Creates two desktop shortcuts. The modded shortcut applies your enabled mods, starts chat translation if it is enabled, and launches the game, with the manager running quietly in the background until you close the game. The plain shortcut just launches the game with no mods and no translation.',
-    th: 'สร้างทางลัดสองอันบนเดสก์ท็อป ทางลัดแบบม็อดจะใช้ม็อดที่เปิดไว้ เริ่มการแปลแชทถ้าเปิดใช้งานอยู่ แล้วเปิดเกม โดยตัวจัดการม็อดจะทำงานเบื้องหลังจนกว่าจะปิดเกม ส่วนทางลัดแบบปกติจะเปิดเกมเฉยๆ โดยไม่มีม็อดและไม่มีการแปลแชท'
+    en: 'Creates two shortcuts on your desktop: one that applies your enabled mods and launches the game, and one that launches it without mods.',
+    th: 'สร้างทางลัดสองอันบนเดสก์ท็อป อันหนึ่งใช้ม็อดที่เปิดไว้แล้วเปิดเกม อีกอันเปิดเกมโดยไม่มีม็อด'
   },
   createShortcuts: { en: 'Create Shortcuts', th: 'สร้างทางลัด' },
   shortcutsCreated: {
@@ -99,8 +99,8 @@ const translations: Record<string, { en: string; th: string }> = {
   resetGameFolder: { en: 'Use Automatic', th: 'ใช้แบบอัตโนมัติ' },
   profileSettings: { en: 'Game Settings', th: 'การตั้งค่าเกม' },
   profileSettingsDescription: {
-    en: 'The modded game keeps its own settings, keybindings and saved login, separate from the normal game, so it starts out like a fresh install. This copies them over from the normal game, replacing what the modded game has now. Close the game first. Nothing is copied automatically, so press it again whenever you want the modded game to catch up.',
-    th: 'เกมแบบม็อดเก็บการตั้งค่า ปุ่มลัด และการล็อกอินที่บันทึกไว้แยกจากเกมปกติ จึงเริ่มต้นเหมือนเพิ่งติดตั้งใหม่ ปุ่มนี้จะคัดลอกทั้งหมดจากเกมปกติมาแทนที่ของเกมแบบม็อด ปิดเกมก่อนกดปุ่มนี้ ระบบจะไม่คัดลอกให้อัตโนมัติ กดอีกครั้งเมื่อต้องการให้เกมแบบม็อดใช้การตั้งค่าล่าสุด'
+    en: 'The modded game has its own settings, keybindings and saved login. This copies them across from the normal game, replacing what is there now. Close the game first.',
+    th: 'เกมแบบม็อดมีการตั้งค่า ปุ่มลัด และการล็อกอินของตัวเอง ปุ่มนี้จะคัดลอกจากเกมปกติมาแทนที่ของเดิม ปิดเกมก่อนกด'
   },
   copyProfileSettings: { en: 'Copy Settings', th: 'คัดลอกการตั้งค่า' },
   profileSettingsCopied: {
