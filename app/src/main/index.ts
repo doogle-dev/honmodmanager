@@ -29,7 +29,6 @@ import {
   onTranslationHealthChanged
 } from './thaiChatTranslation'
 import { chatTranslationStandaloneEdits, chatTranslationStandaloneFiles } from './chatTranslationStandalone'
-import { startWardUpOverlay, stopWardUpOverlay } from './wardUpOverlay'
 import {
   createSystemTray,
   setSystemTrayLanguage,
@@ -300,23 +299,20 @@ function performApplyEnabled(): { fileCount: number; skippedMods: string[] } {
 
 function resumeTranslationSessionIfGameRunning(): void {
   const translationSettings = loadChatTranslationSettings()
+  if (!translationSettings.enabled) {
+    return
+  }
   isGameProcessRunning((running) => {
     if (!running) {
       return
     }
-    logLine('launch', 'game already running, resuming companion sessions')
-    startWardUpOverlay()
-    if (translationSettings.enabled) {
-      startThaiChatTranslation(null, translationSettings.targetLanguage)
-    }
+    logLine('launch', 'game already running, resuming chat translation')
+    startThaiChatTranslation(null, translationSettings.targetLanguage)
     const pollTimer = setInterval(() => {
       isGameProcessRunning((stillRunning) => {
         if (!stillRunning) {
           clearInterval(pollTimer)
-          stopWardUpOverlay()
-          if (translationSettings.enabled) {
-            stopThaiChatTranslation()
-          }
+          stopThaiChatTranslation()
         }
       })
     }, 4000)
@@ -334,10 +330,8 @@ function performModdedLaunch(): ReturnType<typeof launchGame> {
   if (translationSettings.enabled) {
     startThaiChatTranslation(gameProcess, translationSettings.targetLanguage)
   }
-  startWardUpOverlay()
   whenGameFullyExits(gameProcess, () => {
     logLine('launch', 'game exited')
-    stopWardUpOverlay()
   })
   focusGameWindowWhenReady()
   return gameProcess

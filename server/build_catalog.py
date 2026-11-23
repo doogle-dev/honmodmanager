@@ -42,7 +42,6 @@ def build_identifier(display_name):
 
 HIDDEN_MOD_FILE_NAMES = [
     "BossTimersOnScreen.honmod",
-    "WardUpLobbyStats.honmod",
 ]
 
 
