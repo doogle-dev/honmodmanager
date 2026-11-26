@@ -1,7 +1,7 @@
-import { BrowserWindow, app, ipcMain, screen, shell } from 'electron'
+import { app, ipcMain, shell } from 'electron'
 import { ChildProcess } from 'child_process'
 import { join } from 'path'
-import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { startDebugOutputListener, stopDebugOutputListener } from './gameDebugOutputListener'
 import { whenGameFullyExits } from './juvioLauncher'
 import { logLine } from './managerLogger'
@@ -486,14 +486,10 @@ const PRIVATE_MESSAGE_RELAY_LINE_PATTERN =
   /HONIMRELAY\|(\d+)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)\|([A-Za-z0-9+/=]*)/
 const THAI_CHARACTER_PATTERN = new RegExp('[\\u0E00-\\u0E7F]')
 const COLOR_CODE_PATTERN = /\^\d{1,3}|\^\*|\^;|\^[A-Za-z]/g
-const OVERLAY_MESSAGE_LIMIT = 6
-const OVERLAY_WINDOW_ENABLED = false
 
-let overlayWindow: BrowserWindow | null = null
 let translationActive = false
 let sawAnyRelayLine = false
 let relayWatchdogTimer: NodeJS.Timeout | null = null
-let messageCounter = 0
 let lastRelayCounter = 0
 let lastChannelRelayCounter = 0
 let lastWhisperRelayCounter = 0
@@ -508,7 +504,7 @@ const persistentTranslationCache = new Map<string, string>()
 let persistentCacheLoaded = false
 let cacheSaveTimer: ReturnType<typeof setTimeout> | null = null
 const DUPLICATE_WINDOW_MILLISECONDS = 3000
-const TRANSLATION_CACHE_MAXIMUM_BYTES = 20 * 1024 * 1024
+const TRANSLATION_CACHE_MAXIMUM_BYTES = 2 * 1024 * 1024
 const TRANSLATION_CALL_GAP_MILLISECONDS = 300
 
 function decodeRelayField(encoded: string): string {
@@ -1290,51 +1286,6 @@ async function translateText(
   throw new Error('every translation provider failed, ' + failures.join(', '))
 }
 
-async function translateToEnglish(messageText: string): Promise<string> {
-  return translateText(messageText, 'en')
-}
-
-function createOverlayWindow(): void {
-  if (overlayWindow) {
-    return
-  }
-  const workArea = screen.getPrimaryDisplay().workArea
-  const overlayWidth = 460
-  const overlayHeight = 340
-  const window = new BrowserWindow({
-    width: overlayWidth,
-    height: overlayHeight,
-    x: workArea.x + 12,
-    y: workArea.y + Math.round(workArea.height * 0.32),
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: false,
-    skipTaskbar: true,
-    focusable: false,
-    alwaysOnTop: true,
-    hasShadow: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
-  window.setAlwaysOnTop(true, 'screen-saver')
-  window.setIgnoreMouseEvents(true)
-  const rendererDevServerUrl = process.env['ELECTRON_RENDERER_URL']
-  if (rendererDevServerUrl) {
-    window.loadURL(rendererDevServerUrl + '#chat-translation-overlay')
-  } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'chat-translation-overlay' })
-  }
-  window.on('closed', () => {
-    if (overlayWindow === window) {
-      overlayWindow = null
-    }
-  })
-  overlayWindow = window
-}
-
 const OUTGOING_LINE_PATTERN = /HONCHATOUTGOING\|([gl]\d+)\|(team|all|channel|im|whisper)\|([A-Za-z0-9+/=]*)/
 const OUTGOING_SENT_PATTERN = /HONCHATSENT\|[^|]*\|([gl]\d+)/
 const OUTGOING_LATE_PATTERN = /HONCHATOUTGOINGLATE\|([gl]\d+)/
@@ -1690,8 +1641,6 @@ function handleDebugOutputLine(_processId: number, line: string): void {
     return
   }
   const relayCounter = parseInt(match[1], 10)
-  const messageType = match[2]
-  const senderName = decodeRelayField(match[3])
   if (relayCounter === lastRelayCounter) {
     return
   }
@@ -1720,8 +1669,6 @@ function handleDebugOutputLine(_processId: number, line: string): void {
   pendingDuplicateCounter = relayCounter
   pendingDuplicateTime = now
   logLine('translation', 'game chat translating: ' + originalText.slice(0, 60))
-  messageCounter += 1
-  const messageId = messageCounter
   translateWithCache(originalText)
     .then((translatedText) => {
       if (!translationActive || !translatedText) {
@@ -1729,15 +1676,6 @@ function handleDebugOutputLine(_processId: number, line: string): void {
       }
       logLine('translation', 'game chat translated: ' + originalText.slice(0, 60) + ' -> ' + translatedText.slice(0, 60))
       writeTranslationInbox(relayText, translatedText)
-      overlayWindow?.webContents.send('chatTranslation:message', {
-        id: messageId,
-        messageType,
-        senderName,
-        originalText,
-        translatedText,
-        receivedAt: Date.now(),
-        displayLimit: OVERLAY_MESSAGE_LIMIT
-      })
     })
     .catch(() => {})
 }
@@ -1781,9 +1719,6 @@ export function startThaiChatTranslation(gameProcess: ChildProcess | null, targe
   lastOutgoingAt = 0
   clearInboxFiles()
   clearChannelInboxFiles()
-  if (OVERLAY_WINDOW_ENABLED) {
-    createOverlayWindow()
-  }
   startDebugOutputListener(handleDebugOutputLine)
   if (gameProcess) {
     whenGameFullyExits(gameProcess, () => {
@@ -1808,8 +1743,4 @@ export function stopThaiChatTranslation(): void {
     relayWatchdogTimer = null
   }
   stopDebugOutputListener(handleDebugOutputLine)
-  if (overlayWindow) {
-    overlayWindow.close()
-    overlayWindow = null
-  }
 }

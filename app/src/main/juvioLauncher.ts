@@ -1,6 +1,6 @@
 import { join, dirname } from 'path'
 import { existsSync } from 'fs'
-import { spawn, exec, execFileSync, ChildProcess } from 'child_process'
+import { spawn, execFile, execFileSync, ChildProcess } from 'child_process'
 
 const MODDED_LAUNCH_ARGUMENT = 'heroes of newerth;mods'
 
@@ -105,7 +105,8 @@ export function launchGame(juvioRoot: string, withMods: boolean, extraConsoleCom
 }
 
 export function isGameProcessRunning(callback: (running: boolean) => void): void {
-  exec('tasklist /FI "IMAGENAME eq juvio.exe" /FO CSV /NH', (error, stdout) => {
+  // Calling tasklist directly avoids starting a command shell on every poll.
+  execFile('tasklist', ['/FI', 'IMAGENAME eq juvio.exe', '/FO', 'CSV', '/NH'], { windowsHide: true }, (error, stdout) => {
     callback(!error && /juvio\.exe/i.test(stdout ?? ''))
   })
 }

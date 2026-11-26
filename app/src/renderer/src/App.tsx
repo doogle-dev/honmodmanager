@@ -163,6 +163,8 @@ function formatSpeed(bytesPerSecond: number): string {
   return Math.round(bytesPerSecond / 1024) + ' KB/s'
 }
 
+const CATALOG_FOCUS_REFRESH_GAP_MILLISECONDS = 10000
+
 function App(): JSX.Element {
   const [mods, setMods] = useState<CatalogMod[]>([])
   const [status, setStatus] = useState('')
@@ -214,7 +216,13 @@ function App(): JSX.Element {
 
   useEffect(() => {
     loadCatalog()
+    let lastFocusRefreshAt = Date.now()
+    // The window takes focus as it first opens, straight after the load above, and quick switches back and forth need no refetch either.
     const refreshOnFocus = (): void => {
+      if (Date.now() - lastFocusRefreshAt < CATALOG_FOCUS_REFRESH_GAP_MILLISECONDS) {
+        return
+      }
+      lastFocusRefreshAt = Date.now()
       loadCatalog()
     }
     window.addEventListener('focus', refreshOnFocus)
@@ -235,6 +243,11 @@ function App(): JSX.Element {
     window.modManager.getAppInfo().then((appInfo) => {
       setAppVersion(appInfo.version)
       setIsDevBuild(appInfo.isDevBuild)
+      // The window is recreated from the tray, so an update that finished downloading while it was closed is picked up here.
+      if (appInfo.downloadedUpdateVersion) {
+        setUpdateReadyVersion(appInfo.downloadedUpdateVersion)
+        setUpdateMessage({ key: 'updateReadyRestart', params: { version: appInfo.downloadedUpdateVersion } })
+      }
       document.title =
         'Heroes of Newerth Reborn Mod Manager' + (appInfo.isDevBuild ? ' Dev' : '') + ' v' + appInfo.version
     })
@@ -422,7 +435,7 @@ function App(): JSX.Element {
     }
   }
 
-  async function applyEnabled(): Promise<void> {
+  async function applyEnabled(): Promise<boolean> {
     setStatus(t('applying'))
     try {
       const result = await window.modManager.applyEnabled()
@@ -431,22 +444,33 @@ function App(): JSX.Element {
       } else {
         setStatus(result.fileCount === 0 ? t('noModsEnabled') : t('applied'))
       }
+      return true
     } catch (error) {
       setStatus(t('applyFailed', { error: String(error) }))
+      return false
     }
   }
 
   async function unapplyAll(): Promise<void> {
-    await window.modManager.unapplyAll()
-    setMods((current) => current.map((mod) => ({ ...mod, enabled: false })))
-    setStatus(t('allUnapplied'))
+    try {
+      await window.modManager.unapplyAll()
+      setMods((current) => current.map((mod) => ({ ...mod, enabled: false })))
+      setStatus(t('allUnapplied'))
+    } catch (error) {
+      setStatus(t('unapplyFailed', { error: String(error) }))
+    }
   }
 
   async function launchModded(): Promise<void> {
     setLaunchingGame(true)
     try {
-      await applyEnabled()
+      // Launching after a failed apply would start the game with stale or missing mods.
+      if (!(await applyEnabled())) {
+        return
+      }
       await window.modManager.launchModded()
+    } catch (error) {
+      setStatus(t('launchFailed', { error: String(error) }))
     } finally {
       setLaunchingGame(false)
     }

@@ -22,16 +22,6 @@ interface TranslationHealth {
   coolingDownProviders: string[]
 }
 
-interface ChatTranslationMessage {
-  id: number
-  messageType: string
-  senderName: string
-  originalText: string
-  translatedText: string
-  receivedAt: number
-  displayLimit: number
-}
-
 const modManagerApi = {
   listCatalog: () => ipcRenderer.invoke('catalog:list'),
   installMod: (fileName: string) => ipcRenderer.invoke('catalog:install', fileName),
@@ -60,9 +50,6 @@ const modManagerApi = {
   },
   getChatTranslationEnabled: () => ipcRenderer.invoke('chatTranslation:getEnabled'),
   setChatTranslationEnabled: (enabled: boolean) => ipcRenderer.invoke('chatTranslation:setEnabled', enabled),
-  onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => {
-    ipcRenderer.on('chatTranslation:message', (_event, message: ChatTranslationMessage) => listener(message))
-  },
   setChatTranslationLanguage: (language: string) => ipcRenderer.invoke('chatTranslation:setLanguage', language),
   createDesktopShortcuts: () => ipcRenderer.invoke('shortcuts:create'),
   getTranslationCacheInfo: () => ipcRenderer.invoke('chatTranslation:cacheInfo'),

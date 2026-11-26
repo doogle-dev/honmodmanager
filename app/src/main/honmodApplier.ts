@@ -2,6 +2,7 @@ import { mkdirSync } from 'fs'
 import { basename, dirname } from 'path'
 import { XMLParser } from 'fast-xml-parser'
 import { ZipArchiveReader, writeZip64Archive } from './zipArchive'
+import { logLine } from './managerLogger'
 
 export interface HonmodMetadata {
   fileName: string
@@ -75,16 +76,27 @@ function parseManifest(reader: ZipArchiveReader): { modification: Record<string,
   return { modification }
 }
 
+// Only find and replace pairs are supported. Older honmods may also use insert, delete, findall, or conditions, and
+// applying just the parts that are understood would leave the game files half edited.
+const SUPPORTED_EDIT_FILE_KEYS = new Set(['name', 'find', 'replace', '#text'])
+
 function parseOperations(reader: ZipArchiveReader): HonmodOperation[] {
   const { modification } = parseManifest(reader)
   const operations: HonmodOperation[] = []
 
   for (const editFile of asArray(modification.editfile as Record<string, unknown> | Record<string, unknown>[])) {
     const targetPath = readAttribute(editFile, 'name', '')
+    const unsupportedKeys = Object.keys(editFile).filter((key) => !SUPPORTED_EDIT_FILE_KEYS.has(key))
+    if (unsupportedKeys.length > 0) {
+      throw new Error('Unsupported honmod operation in ' + targetPath + ': ' + unsupportedKeys.join(', '))
+    }
     const findElements = asArray(editFile.find)
     const replaceElements = asArray(editFile.replace)
+    if (findElements.length !== replaceElements.length) {
+      throw new Error('Every find needs a matching replace in ' + targetPath)
+    }
     const edits: { find: string; replace: string }[] = []
-    const pairCount = Math.min(findElements.length, replaceElements.length)
+    const pairCount = findElements.length
     for (let index = 0; index < pairCount; index++) {
       edits.push({
         find: extractElementText(findElements[index]),
@@ -173,10 +185,8 @@ export function applyHonmods(
       try {
         for (const operation of parseOperations(honmodReader)) {
           if (operation.kind === 'editfile') {
-            if (!stagedFiles.has(operation.targetPath)) {
-              stagedFiles.set(operation.targetPath, baseReader.readEntry(operation.targetPath))
-            }
-            let fileText = stagedFiles.get(operation.targetPath)!.toString('utf8')
+            const stagedBytes = stagedFiles.get(operation.targetPath) ?? baseReader.readEntry(operation.targetPath)
+            let fileText = stagedBytes.toString('utf8')
             for (const edit of operation.edits) {
               if (!fileText.includes(edit.find)) {
                 throw new Error('Text to replace was not found in ' + operation.targetPath)
@@ -189,8 +199,9 @@ export function applyHonmods(
           }
         }
         modifiedFiles = stagedFiles
-      } catch {
+      } catch (error) {
         skippedMods.push(basename(honmodPath))
+        logLine('apply', 'skipped ' + basename(honmodPath) + ': ' + String(error))
       } finally {
         honmodReader.close()
       }
@@ -198,10 +209,8 @@ export function applyHonmods(
     try {
       const stagedFiles = new Map(modifiedFiles)
       for (const edit of extraEdits) {
-        if (!stagedFiles.has(edit.targetPath)) {
-          stagedFiles.set(edit.targetPath, baseReader.readEntry(edit.targetPath))
-        }
-        const fileText = stagedFiles.get(edit.targetPath)!.toString('utf8')
+        const stagedBytes = stagedFiles.get(edit.targetPath) ?? baseReader.readEntry(edit.targetPath)
+        const fileText = stagedBytes.toString('utf8')
         if (!fileText.includes(edit.find)) {
           throw new Error('Text to replace was not found in ' + edit.targetPath)
         }

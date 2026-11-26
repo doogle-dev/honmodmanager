@@ -150,6 +150,8 @@ const translations: Record<string, { en: string; th: string }> = {
   uninstalled: { en: 'Uninstalled {name}.', th: 'ถอนการติดตั้ง {name} แล้ว' },
   uninstallFailed: { en: 'Uninstall failed: {error}', th: 'ถอนการติดตั้งไม่สำเร็จ: {error}' },
   applyFailed: { en: 'Apply failed: {error}', th: 'ใช้งานม็อดไม่สำเร็จ: {error}' },
+  unapplyFailed: { en: 'Unapply failed: {error}', th: 'ยกเลิกม็อดไม่สำเร็จ: {error}' },
+  launchFailed: { en: 'Launch failed: {error}', th: 'เปิดเกมไม่สำเร็จ: {error}' },
   addedCustom: { en: 'Added {count} custom mod(s).', th: 'เพิ่มม็อดเอง {count} รายการแล้ว' },
   addFailed: { en: 'Add failed: {error}', th: 'เพิ่มไม่สำเร็จ: {error}' },
   loadFailed: { en: 'Failed to load mods: {error}', th: 'โหลดม็อดไม่สำเร็จ: {error}' },

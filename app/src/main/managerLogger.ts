@@ -27,22 +27,34 @@ export function managerLogPath(): string {
   return join(logsDirectory(), MANAGER_LOG_FILE_NAME)
 }
 
-function rotateIfNeeded(currentPath: string): void {
-  try {
-    if (existsSync(currentPath) && statSync(currentPath).size > LOG_MAXIMUM_BYTES) {
-      const archivePath = currentPath.replace(/\.log$/, '.old.log')
-      rmSync(archivePath, { force: true })
-      renameSync(currentPath, archivePath)
-    }
-  } catch {}
+// Chat translation logs several lines per message, so each file's size is checked on disk once and then counted in memory.
+const knownLogSizes = new Map<string, number>()
+
+function rotateIfNeeded(currentPath: string, incomingBytes: number): void {
+  let currentSize = knownLogSizes.get(currentPath)
+  if (currentSize === undefined) {
+    currentSize = existsSync(currentPath) ? statSync(currentPath).size : 0
+  }
+  if (currentSize > LOG_MAXIMUM_BYTES) {
+    const archivePath = currentPath.replace(/\.log$/, '.old.log')
+    rmSync(archivePath, { force: true })
+    renameSync(currentPath, archivePath)
+    currentSize = 0
+  }
+  knownLogSizes.set(currentPath, currentSize + incomingBytes)
 }
 
 export function logLine(area: string, message: string): void {
   try {
     const fileName = TRANSLATION_LOG_AREAS.includes(area) ? TRANSLATION_LOG_FILE_NAME : MANAGER_LOG_FILE_NAME
     const filePath = join(logsDirectory(), fileName)
-    rotateIfNeeded(filePath)
-    appendFileSync(filePath, new Date().toISOString() + ' [' + area + '] ' + message + '\n')
+    const line = new Date().toISOString() + ' [' + area + '] ' + message + '\n'
+    try {
+      rotateIfNeeded(filePath, Buffer.byteLength(line))
+    } catch {
+      knownLogSizes.delete(filePath)
+    }
+    appendFileSync(filePath, line)
   } catch {}
 }
 
