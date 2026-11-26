@@ -435,7 +435,7 @@ function App(): JSX.Element {
     }
   }
 
-  async function applyEnabled(): Promise<void> {
+  async function applyEnabled(): Promise<boolean> {
     setStatus(t('applying'))
     try {
       const result = await window.modManager.applyEnabled()
@@ -444,22 +444,33 @@ function App(): JSX.Element {
       } else {
         setStatus(result.fileCount === 0 ? t('noModsEnabled') : t('applied'))
       }
+      return true
     } catch (error) {
       setStatus(t('applyFailed', { error: String(error) }))
+      return false
     }
   }
 
   async function unapplyAll(): Promise<void> {
-    await window.modManager.unapplyAll()
-    setMods((current) => current.map((mod) => ({ ...mod, enabled: false })))
-    setStatus(t('allUnapplied'))
+    try {
+      await window.modManager.unapplyAll()
+      setMods((current) => current.map((mod) => ({ ...mod, enabled: false })))
+      setStatus(t('allUnapplied'))
+    } catch (error) {
+      setStatus(t('unapplyFailed', { error: String(error) }))
+    }
   }
 
   async function launchModded(): Promise<void> {
     setLaunchingGame(true)
     try {
-      await applyEnabled()
+      // Launching after a failed apply would start the game with stale or missing mods.
+      if (!(await applyEnabled())) {
+        return
+      }
       await window.modManager.launchModded()
+    } catch (error) {
+      setStatus(t('launchFailed', { error: String(error) }))
     } finally {
       setLaunchingGame(false)
     }
