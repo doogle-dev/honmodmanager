@@ -4,8 +4,7 @@ import chatTranslationScreenshotPath from '../../resources/chat_translation_scre
 import taskbarAlertIconPath from '../../resources/taskbar_alert.png?asset'
 import { autoUpdater, CancellationToken } from 'electron-updater'
 import { join, resolve, basename } from 'path'
-import { spawn } from 'child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, statSync } from 'fs'
 import {
   locateJuvioRoot,
   detectJuvioRoot,
@@ -18,6 +17,7 @@ import {
   isGameProcessRunning
 } from './juvioLauncher'
 import { applyHonmods, readHonmodMetadata, readHonmodIconDataUrl } from './honmodApplier'
+import type { HonmodMetadata } from './honmodApplier'
 import {
   chatRelayLuaEdits,
   CHAT_RELAY_CONSOLE_COMMAND,
@@ -39,6 +39,7 @@ import { copyVanillaSettingsToModdedProfile } from './profileSettings'
 import { fetchCatalog, resolveCatalogUrl, installCatalogMod } from './catalogClient'
 import { logLine, logsDirectory, translationLogPath } from './managerLogger'
 import { startLogTail, stopLogTail } from './logTail'
+import { spawnManagerHelper } from './managerHelper'
 import type { LogName } from './logTail'
 import type { Catalog } from './catalogClient'
 import type { TranslationHealth } from './thaiChatTranslation'
@@ -46,6 +47,10 @@ import type { TranslationHealth } from './thaiChatTranslation'
 if (!app.isPackaged) {
   app.setPath('userData', join(app.getPath('appData'), 'hon-reborn-mod-manager-development'))
 }
+
+// The interface is flat panels and text, so software rendering looks the same and avoids a GPU
+// process that otherwise holds well over a hundred megabytes.
+app.disableHardwareAcceleration()
 
 const VIRTUAL_TRANSLATION_FILE_NAME = 'ChatTranslation.feature'
 const DEVELOPMENT_CATALOG_URL = 'http://localhost:8787'
@@ -80,10 +85,18 @@ function catalogCachePath(): string {
   return join(app.getPath('userData'), 'catalog-cache.json')
 }
 
+let lastSavedCatalogJson = ''
+
 function rememberCatalog(fetched: { catalog: Catalog; baseUrl: string }): void {
   activeCatalogBaseUrl = fetched.baseUrl
+  // The catalog is fetched every time the window gains focus and rarely changes, so it is only written when it does.
+  const catalogJson = JSON.stringify(fetched)
+  if (catalogJson === lastSavedCatalogJson) {
+    return
+  }
   try {
-    writeFileSync(catalogCachePath(), JSON.stringify(fetched))
+    writeFileSync(catalogCachePath(), catalogJson)
+    lastSavedCatalogJson = catalogJson
   } catch (error) {
     logLine('app', 'could not save the catalog cache: ' + String(error))
   }
@@ -126,13 +139,12 @@ function isDevChannelBuild(): boolean {
 }
 
 function focusGameWindowWhenReady(): void {
-  const focusScript =
-    '$shell = New-Object -ComObject WScript.Shell; for ($attempt = 0; $attempt -lt 20; $attempt++) { Start-Sleep -Seconds 2; $gameProcess = Get-Process juvio -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; if ($gameProcess -and $shell.AppActivate($gameProcess.Id)) { Start-Sleep -Seconds 5; $shell.AppActivate($gameProcess.Id) | Out-Null; break } }'
-  const child = spawn('powershell.exe', ['-NoProfile', '-Command', focusScript], {
-    stdio: 'ignore',
-    windowsHide: true
-  })
-  child.unref()
+  spawnManagerHelper('focus-game', { stdio: 'ignore', windowsHide: true })
+    .then((child) => {
+      child.on('error', (error) => logLine('launch', 'the game focus helper failed: ' + String(error)))
+      child.unref()
+    })
+    .catch((error) => logLine('launch', 'could not start the game focus helper: ' + String(error)))
 }
 
 function parseVersionParts(versionText: string): number[] {
@@ -164,21 +176,30 @@ function chatTranslationSettingsPath(): string {
   return join(app.getPath('userData'), 'chat-translation.json')
 }
 
-function loadChatTranslationSettings(): {
+type ChatTranslationSettings = {
   enabled: boolean
   targetLanguage: 'en' | 'th'
   useStandaloneHooks: boolean
-} {
+}
+
+// The health check asks for these every few seconds, so the file is read once and kept in step on save.
+let chatTranslationSettingsCache: ChatTranslationSettings | null = null
+
+function loadChatTranslationSettings(): ChatTranslationSettings {
+  if (chatTranslationSettingsCache) {
+    return chatTranslationSettingsCache
+  }
   try {
     const stored = JSON.parse(readFileSync(chatTranslationSettingsPath(), 'utf8'))
-    return {
+    chatTranslationSettingsCache = {
       enabled: stored.enabled === true,
       targetLanguage: stored.targetLanguage === 'th' ? 'th' : 'en',
       useStandaloneHooks: stored.useStandaloneHooks === true
     }
   } catch {
-    return { enabled: false, targetLanguage: 'en', useStandaloneHooks: false }
+    chatTranslationSettingsCache = { enabled: false, targetLanguage: 'en', useStandaloneHooks: false }
   }
+  return chatTranslationSettingsCache
 }
 
 function loadChatTranslationEnabled(): boolean {
@@ -191,6 +212,7 @@ function saveChatTranslationSettings(enabled: boolean, targetLanguage: 'en' | 't
     chatTranslationSettingsPath(),
     JSON.stringify({ enabled, targetLanguage, useStandaloneHooks }, null, 2)
   )
+  chatTranslationSettingsCache = { enabled, targetLanguage, useStandaloneHooks }
 }
 
 function saveChatTranslationEnabled(enabled: boolean): void {
@@ -251,6 +273,36 @@ function loadEnabledFileNames(): string[] {
 
 function saveEnabledFileNames(enabledFileNames: string[]): void {
   writeFileSync(enabledStateFilePath(), JSON.stringify({ enabled: enabledFileNames }, null, 2))
+}
+
+type HonmodDetails = { metadata: HonmodMetadata; iconDataUrl: string | null }
+
+const honmodDetailsCache = new Map<string, { modifiedTime: number; size: number; details: HonmodDetails }>()
+
+// The library is listed every time the window gains focus, so a honmod is only opened again after it changes on disk.
+function readHonmodDetails(honmodPath: string): HonmodDetails {
+  const fileStats = statSync(honmodPath)
+  const cached = honmodDetailsCache.get(honmodPath)
+  if (cached && cached.modifiedTime === fileStats.mtimeMs && cached.size === fileStats.size) {
+    return cached.details
+  }
+  const details: HonmodDetails = {
+    metadata: readHonmodMetadata(honmodPath),
+    iconDataUrl: readHonmodIconDataUrl(honmodPath)
+  }
+  honmodDetailsCache.set(honmodPath, { modifiedTime: fileStats.mtimeMs, size: fileStats.size, details })
+  return details
+}
+
+let chatTranslationScreenshotDataUrl: string | null | undefined = undefined
+
+function chatTranslationScreenshot(): string | null {
+  if (chatTranslationScreenshotDataUrl === undefined) {
+    chatTranslationScreenshotDataUrl = existsSync(chatTranslationScreenshotPath)
+      ? 'data:image/png;base64,' + readFileSync(chatTranslationScreenshotPath).toString('base64')
+      : null
+  }
+  return chatTranslationScreenshotDataUrl
 }
 
 function listHonmodPaths(): string[] {
@@ -348,14 +400,14 @@ function registerInterProcessHandlers(): void {
   ipcMain.handle('mods:list', () => {
     const enabledFileNames = loadEnabledFileNames()
     return listHonmodPaths().map((honmodPath) => {
-      const metadata = readHonmodMetadata(honmodPath)
+      const { metadata, iconDataUrl } = readHonmodDetails(honmodPath)
       return {
         fileName: metadata.fileName,
         name: metadata.name,
         version: metadata.version,
         author: metadata.author,
         description: metadata.description,
-        iconDataUrl: readHonmodIconDataUrl(honmodPath),
+        iconDataUrl,
         enabled: enabledFileNames.includes(metadata.fileName)
       }
     })
@@ -446,11 +498,10 @@ function registerInterProcessHandlers(): void {
 
   ipcMain.handle('catalog:list', async () => {
     const enabledFileNames = loadEnabledFileNames()
-    const libraryDirectory = honmodLibraryDirectory()
-    const installedMetadata = new Map<string, ReturnType<typeof readHonmodMetadata>>()
+    const installedDetails = new Map<string, HonmodDetails>()
     for (const honmodPath of listHonmodPaths()) {
-      const metadata = readHonmodMetadata(honmodPath)
-      installedMetadata.set(metadata.fileName, metadata)
+      const details = readHonmodDetails(honmodPath)
+      installedDetails.set(details.metadata.fileName, details)
     }
 
     const { catalog, catalogError, catalogFromCache } = await loadCatalogWithFallback()
@@ -461,7 +512,8 @@ function registerInterProcessHandlers(): void {
     if (catalog) {
       for (const entry of catalog.mods) {
         seenFileNames.add(entry.fileName)
-        const installed = installedMetadata.get(entry.fileName)
+        const installedEntry = installedDetails.get(entry.fileName)
+        const installed = installedEntry?.metadata
         rows.push({
           fileName: entry.fileName,
           name: entry.name,
@@ -470,9 +522,7 @@ function registerInterProcessHandlers(): void {
           description: entry.description,
           category: entry.category,
           abilityKey: installed ? installed.abilityKey : (entry.abilityKey ?? ''),
-          icon: installed
-            ? (readHonmodIconDataUrl(join(libraryDirectory, entry.fileName)) ?? resolveCatalogUrl(catalogBaseUrl(), entry.icon))
-            : resolveCatalogUrl(catalogBaseUrl(), entry.icon),
+          icon: installedEntry?.iconDataUrl ?? resolveCatalogUrl(catalogBaseUrl(), entry.icon),
           screenshot: entry.screenshot ? resolveCatalogUrl(catalogBaseUrl(), entry.screenshot) : null,
           installed: installed !== undefined,
           enabled: enabledFileNames.includes(entry.fileName),
@@ -481,7 +531,7 @@ function registerInterProcessHandlers(): void {
       }
     }
 
-    for (const [fileName, metadata] of installedMetadata) {
+    for (const [fileName, { metadata, iconDataUrl }] of installedDetails) {
       if (seenFileNames.has(fileName)) {
         continue
       }
@@ -493,7 +543,7 @@ function registerInterProcessHandlers(): void {
         description: metadata.description,
         category: metadata.category,
         abilityKey: metadata.abilityKey,
-        icon: readHonmodIconDataUrl(join(libraryDirectory, fileName)),
+        icon: iconDataUrl,
         screenshot: null,
         installed: true,
         enabled: enabledFileNames.includes(fileName),
@@ -512,9 +562,7 @@ function registerInterProcessHandlers(): void {
       category: 'Utility',
       abilityKey: '',
       icon: null,
-      screenshot: existsSync(chatTranslationScreenshotPath)
-        ? 'data:image/png;base64,' + readFileSync(chatTranslationScreenshotPath).toString('base64')
-        : null,
+      screenshot: chatTranslationScreenshot(),
       installed: translationSettings.enabled,
       enabled: translationSettings.enabled,
       updateAvailable: false
@@ -646,7 +694,8 @@ function registerInterProcessHandlers(): void {
     version: app.getVersion(),
     catalogUrl: catalogBaseUrl(),
     libraryPath: honmodLibraryDirectory(),
-    isDevBuild: isDevChannelBuild()
+    isDevBuild: isDevChannelBuild(),
+    downloadedUpdateVersion
   }))
 
   ipcMain.handle('windowBehaviour:getCloseToTray', () => loadCloseToTray())
@@ -799,9 +848,8 @@ function createMainWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
+    // Closing rather than hiding frees the window's renderer memory while the game runs, and the tray recreates it on demand.
     if (!isQuittingApplication && loadCloseToTray()) {
-      event.preventDefault()
-      mainWindow.hide()
       announceWindowHiddenToTray()
       return
     }
@@ -828,7 +876,6 @@ function createMainWindow(): void {
     if (mainWindowReference === mainWindow) {
       mainWindowReference = null
     }
-    stopThaiChatTranslation()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -978,7 +1025,7 @@ app.on('will-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && (isQuittingApplication || !loadCloseToTray())) {
     app.quit()
   }
 })

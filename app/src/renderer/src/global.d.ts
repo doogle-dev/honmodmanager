@@ -24,6 +24,7 @@ interface AppInfo {
   catalogUrl: string
   libraryPath: string
   isDevBuild: boolean
+  downloadedUpdateVersion: string
 }
 
 interface ModManagerApi {

@@ -163,6 +163,8 @@ function formatSpeed(bytesPerSecond: number): string {
   return Math.round(bytesPerSecond / 1024) + ' KB/s'
 }
 
+const CATALOG_FOCUS_REFRESH_GAP_MILLISECONDS = 10000
+
 function App(): JSX.Element {
   const [mods, setMods] = useState<CatalogMod[]>([])
   const [status, setStatus] = useState('')
@@ -214,7 +216,13 @@ function App(): JSX.Element {
 
   useEffect(() => {
     loadCatalog()
+    let lastFocusRefreshAt = Date.now()
+    // The window takes focus as it first opens, straight after the load above, and quick switches back and forth need no refetch either.
     const refreshOnFocus = (): void => {
+      if (Date.now() - lastFocusRefreshAt < CATALOG_FOCUS_REFRESH_GAP_MILLISECONDS) {
+        return
+      }
+      lastFocusRefreshAt = Date.now()
       loadCatalog()
     }
     window.addEventListener('focus', refreshOnFocus)
@@ -235,6 +243,11 @@ function App(): JSX.Element {
     window.modManager.getAppInfo().then((appInfo) => {
       setAppVersion(appInfo.version)
       setIsDevBuild(appInfo.isDevBuild)
+      // The window is recreated from the tray, so an update that finished downloading while it was closed is picked up here.
+      if (appInfo.downloadedUpdateVersion) {
+        setUpdateReadyVersion(appInfo.downloadedUpdateVersion)
+        setUpdateMessage({ key: 'updateReadyRestart', params: { version: appInfo.downloadedUpdateVersion } })
+      }
       document.title =
         'Heroes of Newerth Reborn Mod Manager' + (appInfo.isDevBuild ? ' Dev' : '') + ' v' + appInfo.version
     })

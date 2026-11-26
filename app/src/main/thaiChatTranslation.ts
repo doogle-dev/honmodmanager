@@ -508,7 +508,7 @@ const persistentTranslationCache = new Map<string, string>()
 let persistentCacheLoaded = false
 let cacheSaveTimer: ReturnType<typeof setTimeout> | null = null
 const DUPLICATE_WINDOW_MILLISECONDS = 3000
-const TRANSLATION_CACHE_MAXIMUM_BYTES = 20 * 1024 * 1024
+const TRANSLATION_CACHE_MAXIMUM_BYTES = 2 * 1024 * 1024
 const TRANSLATION_CALL_GAP_MILLISECONDS = 300
 
 function decodeRelayField(encoded: string): string {

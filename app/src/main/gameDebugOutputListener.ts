@@ -1,65 +1,23 @@
-import { spawn, ChildProcess } from 'child_process'
-import { app } from 'electron'
+import { ChildProcess } from 'child_process'
 import { logLine } from './managerLogger'
-import { writeFileSync } from 'fs'
-import { join } from 'path'
-
-const LISTENER_SCRIPT = String.raw`$typeDefinition = @"
-using System;
-using System.IO.MemoryMappedFiles;
-using System.Text;
-using System.Threading;
-
-public static class DebugOutputListener
-{
-    public static void Run()
-    {
-        EventWaitHandle bufferReady = new EventWaitHandle(false, EventResetMode.AutoReset, "DBWIN_BUFFER_READY");
-        EventWaitHandle dataReady = new EventWaitHandle(false, EventResetMode.AutoReset, "DBWIN_DATA_READY");
-        using (MemoryMappedFile mappedFile = MemoryMappedFile.CreateOrOpen("DBWIN_BUFFER", 4096))
-        using (MemoryMappedViewAccessor accessor = mappedFile.CreateViewAccessor(0, 4096, MemoryMappedFileAccess.Read))
-        {
-            bufferReady.Set();
-            while (true)
-            {
-                if (!dataReady.WaitOne(1000)) { continue; }
-                int processId = accessor.ReadInt32(0);
-                byte[] messageBytes = new byte[4092];
-                accessor.ReadArray(4, messageBytes, 0, 4092);
-                int length = Array.IndexOf(messageBytes, (byte)0);
-                if (length < 0) { length = messageBytes.Length; }
-                string message = Encoding.Default.GetString(messageBytes, 0, length);
-                Console.WriteLine(processId.ToString() + "\t" + message.TrimEnd('\r', '\n'));
-                bufferReady.Set();
-            }
-        }
-    }
-}
-"@
-Add-Type -TypeDefinition $typeDefinition -ReferencedAssemblies System.Core
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-[DebugOutputListener]::Run()
-`
+import { spawnManagerHelper } from './managerHelper'
 
 export type DebugOutputLineHandler = (processId: number, message: string) => void
 
 let listenerProcess: ChildProcess | null = null
+let listenerStarting: boolean = false
 const lineHandlers = new Set<DebugOutputLineHandler>()
 
-export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
-  lineHandlers.add(onLine)
-  if (listenerProcess) {
+function attachListenerProcess(child: ChildProcess): void {
+  const standardOutput = child.stdout
+  if (!standardOutput) {
+    logLine('listener', 'debug output listener started without an output stream')
+    child.kill()
     return
   }
-  const scriptPath = join(app.getPath('userData'), 'debugOutputListener.ps1')
-  writeFileSync(scriptPath, LISTENER_SCRIPT)
-  const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
-    stdio: ['ignore', 'pipe', 'ignore'],
-    windowsHide: true
-  })
   let pendingOutput = ''
-  child.stdout.setEncoding('utf8')
-  child.stdout.on('data', (chunk: string) => {
+  standardOutput.setEncoding('utf8')
+  standardOutput.on('data', (chunk: string) => {
     pendingOutput += chunk
     const lines = pendingOutput.split('\n')
     pendingOutput = lines.pop() ?? ''
@@ -75,6 +33,12 @@ export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
       }
     }
   })
+  child.on('error', (error) => {
+    logLine('listener', 'debug output listener failed: ' + String(error))
+    if (listenerProcess === child) {
+      listenerProcess = null
+    }
+  })
   child.on('exit', (exitCode) => {
     logLine('listener', 'debug output listener exited with code ' + String(exitCode))
     if (listenerProcess === child) {
@@ -83,6 +47,28 @@ export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
   })
   listenerProcess = child
   logLine('listener', 'debug output listener started, pid ' + String(child.pid))
+}
+
+export function startDebugOutputListener(onLine: DebugOutputLineHandler): void {
+  lineHandlers.add(onLine)
+  if (listenerProcess || listenerStarting) {
+    return
+  }
+  listenerStarting = true
+  spawnManagerHelper('debug-output', { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
+    .then((child) => {
+      listenerStarting = false
+      // The session can end while the helper is still being prepared.
+      if (lineHandlers.size === 0 || listenerProcess) {
+        child.kill()
+        return
+      }
+      attachListenerProcess(child)
+    })
+    .catch((error) => {
+      listenerStarting = false
+      logLine('listener', 'debug output listener could not start: ' + String(error))
+    })
 }
 
 export function stopDebugOutputListener(onLine?: DebugOutputLineHandler): void {
