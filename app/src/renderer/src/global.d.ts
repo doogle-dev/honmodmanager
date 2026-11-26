@@ -47,7 +47,6 @@ interface ModManagerApi {
   onUpdateError: (listener: (message: string) => void) => void
   getChatTranslationEnabled: () => Promise<boolean>
   setChatTranslationEnabled: (enabled: boolean) => Promise<boolean>
-  onChatTranslationMessage: (listener: (message: ChatTranslationMessage) => void) => void
   setChatTranslationLanguage: (language: string) => Promise<boolean>
   createDesktopShortcuts: () => Promise<{ vanillaCreated: boolean; moddedCreated: boolean }>
   getTranslationCacheInfo: () => Promise<{ entryCount: number; sizeBytes: number }>
@@ -90,16 +89,6 @@ interface TranslationHealth {
   lastSuccessAt: number
   lastFailureAt: number
   coolingDownProviders: string[]
-}
-
-interface ChatTranslationMessage {
-  id: number
-  messageType: string
-  senderName: string
-  originalText: string
-  translatedText: string
-  receivedAt: number
-  displayLimit: number
 }
 
 interface UpdateProgress {
