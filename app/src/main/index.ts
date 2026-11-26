@@ -597,7 +597,7 @@ function registerInterProcessHandlers(): void {
       stopThaiChatTranslation()
       return true
     }
-    const honmodPath = join(honmodLibraryDirectory(), fileName)
+    const honmodPath = join(honmodLibraryDirectory(), basename(fileName))
     if (existsSync(honmodPath)) {
       rmSync(honmodPath)
     }
@@ -835,7 +835,7 @@ function createMainWindow(): void {
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -878,9 +878,17 @@ function createMainWindow(): void {
     }
   })
 
+  // Links open in the browser, and only web links, since other URL schemes can launch local programs.
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (/^https:\/\//i.test(details.url)) {
+      shell.openExternal(details.url)
+    }
     return { action: 'deny' }
+  })
+
+  // The window exposes the manager's controls to whatever page it shows, so it never leaves the bundled interface.
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault()
   })
 
   const rendererDevServerUrl = process.env['ELECTRON_RENDERER_URL']
